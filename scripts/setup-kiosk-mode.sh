@@ -19,13 +19,19 @@ sudo apt install -y --no-install-recommends \
     xserver-xorg \
     x11-xserver-utils \
     xinit \
-    chromium \
+    netsurf-gtk \
     unclutter
 
 echo "✅ Dependencias instaladas"
 echo ""
 
-# 2. Crear .xinitrc
+# 2. Agregar usuario a los grupos necesarios para X
+echo "👥 Configurando permisos de usuario..."
+sudo usermod -a -G tty,video,input $CURRENT_USER
+echo "✅ Usuario $CURRENT_USER agregado a grupos: tty, video, input"
+echo ""
+
+# 3. Crear .xinitrc
 echo "📝 Creando archivo .xinitrc..."
 cat > "$HOME_DIR/.xinitrc" << 'EOF'
 #!/bin/bash
@@ -42,34 +48,19 @@ unclutter -idle 0 &
 cd ~/FPVCopilotGCS
 NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
 
-# Esperar a que el servidor esté listo (más tiempo para Pi Zero)
+# Esperar a que el servidor esté listo
 echo "Esperando a que el servidor inicie..."
 sleep 15
 
-# Abrir Chromium en modo kiosk con optimizaciones para Pi Zero
-chromium \
-    --kiosk \
-    --noerrdialogs \
-    --disable-infobars \
-    --disable-session-crashed-bubble \
-    --no-first-run \
-    --disable-translate \
-    --disable-features=TranslateUI \
-    --disable-gpu \
-    --disable-software-rasterizer \
-    --disable-dev-shm-usage \
-    --no-sandbox \
-    --disable-setuid-sandbox \
-    --disk-cache-dir=/tmp/chromium-cache \
-    --disk-cache-size=10485760 \
-    http://localhost:3000
+# Abrir Netsurf en fullscreen (navegador ultra-ligero para Pi Zero)
+netsurf-gtk -f http://localhost:3000
 EOF
 
 chmod +x "$HOME_DIR/.xinitrc"
 echo "✅ Archivo .xinitrc creado"
 echo ""
 
-# 3. Configurar inicio automático
+# 4. Configurar inicio automático
 echo "⚙️  Configurando inicio automático..."
 
 # Backup del .bash_profile si existe
@@ -93,7 +84,7 @@ fi
 
 echo ""
 
-# 4. Configurar autologin en tty1
+# 5. Configurar autologin en tty1
 echo "🔐 Configurando autologin en tty1..."
 sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
 
@@ -108,7 +99,7 @@ echo "✅ Autologin configurado para $CURRENT_USER"
 
 echo ""
 
-# 5. Verificar que la aplicación existe
+# 6. Verificar que la aplicación existe
 if [ ! -d "$HOME_DIR/FPVCopilotGCS" ]; then
     echo "⚠️  ADVERTENCIA: No se encontró el directorio FPVCopilotGCS"
     echo "   Asegúrate de clonar el repositorio en $HOME_DIR/FPVCopilotGCS"
@@ -124,6 +115,8 @@ echo "   2. Verifica que 'npm install --omit=dev' se haya ejecutado"
 echo "   3. Copia la carpeta client/dist desde tu máquina de desarrollo:"
 echo "      scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/"
 echo "   4. Reinicia la Raspberry Pi: sudo reboot"
+echo ""
+echo "⚠️  IMPORTANTE: Debes reiniciar para que los cambios de grupos tengan efecto"
 echo ""
 echo "🌐 Al reiniciar, la Pi hará autologin y verás la aplicación en fullscreen"
 echo "🔌 Para acceder por SSH, usa otro terminal (la consola estará en X)"

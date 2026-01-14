@@ -126,24 +126,24 @@ sudo reboot
 ```
 
 El script automáticamente:
-- ✅ Instala X server, **Midori** (navegador ligero) y utilidades mínimas
+- ✅ Instala X server, **Netsurf** (navegador ultra-ligero) y utilidades mínimas
 - ✅ Configura `.xinitrc` para iniciar solo el navegador
 - ✅ Configura inicio automático en `.bash_profile`
 - ✅ **Configura autologin en tty1** (crítico para inicio automático)
 - ✅ Desactiva screensaver y ahorro de energía
 - ✅ Oculta el cursor del mouse
 
-**Nota**: Se usa **Midori** en lugar de Chromium porque es mucho más ligero y eficiente para Raspberry Pi Zero (ARMv6, 512MB RAM).
+**Nota**: Se usa **Netsurf** porque es el navegador más ligero disponible para Raspberry Pi Zero (ARMv6, 512MB RAM). Chromium es demasiado pesado y no funciona correctamente.
 
 ### Configuración manual
 
 1. **Instalar dependencias mínimas:**
 ```bash
 sudo apt update
-sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit midori unclutter
+sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit netsurf-gtk unclutter
 ```
 
-**Nota**: Se usa Midori en lugar de Chromium porque es mucho más eficiente en Pi Zero.
+**Nota**: Se usa Netsurf porque es ultra-ligero y funciona en Pi Zero. Chromium/Midori son demasiado pesados.
 
 2. **Crear archivo `.xinitrc`:**
 ```bash
@@ -161,9 +161,9 @@ unclutter -idle 0 &
 cd ~/FPVCopilotGCS
 NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
 
-sleep 10
+sleep 15
 
-midori -e Fullscreen -a http://localhost:3000
+netsurf-gtk -f http://localhost:3000
 ```
 
 ```bash
@@ -296,15 +296,17 @@ scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/
 # Ver logs de X
 cat ~/.local/share/xorg/Xorg.0.log
 
-# Verificar que Midori esté instalado
-which midori
+# Verificar que Netsurf esté instalado
+which netsurf-gtk
 
 # Verificar autologin
 cat /etc/systemd/system/getty@tty1.service.d/autologin.conf
 
-# Probar Midori manualmente desde SSH
-DISPLAY=:0 midori http://localhost:3000 &
+# Probar Netsurf manualmente desde SSH
+DISPLAY=:0 netsurf-gtk http://localhost:3000 &
 ```
+
+**Nota importante sobre Pi Zero**: La Raspberry Pi Zero tiene solo 512MB de RAM y un procesador ARMv6. Los navegadores modernos como Chromium pueden no funcionar correctamente. Si Netsurf tampoco funciona, considera usar una Raspberry Pi más potente (Pi 3/4/5) o acceder a la aplicación desde otro dispositivo.
 
 ### La aplicación no inicia automáticamente
 ```bash
