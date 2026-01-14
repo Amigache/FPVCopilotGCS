@@ -19,7 +19,7 @@ sudo apt install -y --no-install-recommends \
     xserver-xorg \
     x11-xserver-utils \
     xinit \
-    midori \
+    chromium \
     unclutter
 
 echo "✅ Dependencias instaladas"
@@ -42,12 +42,27 @@ unclutter -idle 0 &
 cd ~/FPVCopilotGCS
 NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
 
-# Esperar a que el servidor esté listo
+# Esperar a que el servidor esté listo (más tiempo para Pi Zero)
 echo "Esperando a que el servidor inicie..."
-sleep 10
+sleep 15
 
-# Abrir Midori en modo fullscreen (más ligero y eficiente para Pi Zero)
-midori -e Fullscreen -a http://localhost:3000
+# Abrir Chromium en modo kiosk con optimizaciones para Pi Zero
+chromium \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --no-first-run \
+    --disable-translate \
+    --disable-features=TranslateUI \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-dev-shm-usage \
+    --no-sandbox \
+    --disable-setuid-sandbox \
+    --disk-cache-dir=/tmp/chromium-cache \
+    --disk-cache-size=10485760 \
+    http://localhost:3000
 EOF
 
 chmod +x "$HOME_DIR/.xinitrc"
