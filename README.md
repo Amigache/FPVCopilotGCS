@@ -1,166 +1,316 @@
 # FPV Copilot GCS
 
-Sistema de Control de Tierra (Ground Control Station) para Raspberry Pi Zero con interfaz estilo Android.
+Ground Control Station (GCS) para drones FPV con soporte MAVLink, diseñado para ejecutarse en Raspberry Pi Zero con pantalla HDMI fullscreen (modo kiosk).
 
-## 📋 Características
+## ✨ Características
 
-- **Backend**: Node.js + Express
-- **Frontend**: React + Vite
-- **Interfaz**: Diseño estilo Android con barra superior y área de contenido
-- **Target**: Raspberry Pi Zero con salida HDMI fullscreen
+### 🎯 Funcionalidades principales
+
+- **Comunicación MAVLink**: Soporte completo para conexiones Serial, TCP y UDP
+- **Telemetría en tiempo real**: Monitoreo de señal, batería, GPS, velocidad y más
+- **Mapa interactivo**: 
+  - Visualización con Leaflet (OpenStreetMap y vista satélite)
+  - Seguimiento automático de vehículos
+  - Marcadores direccionales con heading en tiempo real
+  - Menú contextual para interacciones en el mapa
+- **Control de vehículos**: Armado/desarmado con confirmaciones de seguridad
+- **Gestión de parámetros**: Descarga, edición y carga de parámetros del vehículo
+- **Interfaz táctil**: Teclado en pantalla para dispositivos touch
+- **Multiidioma**: Soporte para Español e Inglés (i18n)
+- **Auto-reconexión**: Conexión automática al iniciar la aplicación
+- **Modo kiosk**: Ejecución en pantalla completa sin escritorio
+
+### 🎨 Interfaz de usuario
+
+- **Top Bar**: Badges con información de vehículo, estado armado, señal, batería, GPS y telemetría
+- **Sidebar**: Panel deslizante con información del vehículo y controles de acción
+- **Mapa**: Vista principal con vehículos, posición y controles de navegación
+- **Configuración**: Panel de ajustes con conexiones, parámetros y configuración general
+
+## 🔧 Requisitos del sistema
+
+### Hardware
+- **Raspberry Pi Zero W/WH** (ARMv6) o superior
+- Pantalla HDMI
+- Conexión a autopiloto vía Serial/USB o red (TCP/UDP)
+
+### Software
+- **Raspberry Pi OS Lite** (sin escritorio, recomendado)
+- Node.js 18.x o superior
+- npm 9.x o superior
+
+### ⚠️ Limitación importante de Raspberry Pi Zero
+
+La Raspberry Pi Zero tiene un procesador **ARMv6** que **NO puede ejecutar Vite** (servidor de desarrollo):
+
+- ❌ **NO puedes** ejecutar `npm run dev` en la Pi Zero
+- ✅ **SÍ puedes** ejecutar en modo producción
+- 📦 El **build debe hacerse** en tu máquina de desarrollo (x64/ARM64)
+
+**Flujo de trabajo recomendado:**
+1. Desarrolla en tu máquina con `npm run dev`
+2. Haz el build con `npm run build`
+3. Copia los archivos a la Pi Zero
+4. Ejecuta en modo producción
 
 ## 🚀 Instalación
 
-### Instalación de dependencias
+### En tu máquina de desarrollo
 
 ```bash
-# Instalar dependencias del backend y frontend
+# 1. Clonar el repositorio
+git clone https://github.com/Amigache/FPVCopilotGCS.git
+cd FPVCopilotGCS
+
+# 2. Instalar dependencias
 npm run install:all
-```
 
-## 💻 Desarrollo
-
-Para ejecutar la aplicación en modo desarrollo:
-
-```bash
-# Iniciar backend y frontend simultáneamente
+# 3. Ejecutar en modo desarrollo
 npm run dev
 ```
 
 Esto iniciará:
-- Backend en `http://localhost:3000`
-- Frontend en `http://localhost:5173`
+- **Backend**: `http://localhost:3000`
+- **Frontend**: `http://localhost:5173` (con hot-reload)
 
-## 🏗️ Construcción para producción
+### En Raspberry Pi Zero
 
+**Opción 1: Copiar archivos manualmente**
+
+En tu máquina de desarrollo:
 ```bash
-# Construir el frontend
+# Hacer el build
 npm run build
 
-# Iniciar el servidor en modo producción
+# Copiar a la Pi (ajusta la IP)
+scp -r server client/dist package*.json usuario@192.168.1.100:~/FPVCopilotGCS/
+```
+
+En la Raspberry Pi:
+```bash
+cd ~/FPVCopilotGCS
+npm install --omit=dev
 NODE_ENV=production npm start
 ```
 
-## 🥧 Configuración para Raspberry Pi Zero
+**Opción 2: Clonar y hacer build en otra máquina, luego copiar**
 
-### Requisitos previos
-
-- Raspberry Pi Zero W/WH con Raspberry Pi OS
-- Node.js 18 o superior instalado
-- Conexión HDMI
-
-### Instalación en Raspberry Pi
-
-1. Clonar el repositorio:
 ```bash
-git clone <repository-url>
+# En la Pi, solo clonar (sin build)
+git clone https://github.com/Amigache/FPVCopilotGCS.git
 cd FPVCopilotGCS
+npm install --omit=dev
+
+# Luego copiar la carpeta client/dist desde tu máquina
 ```
 
-2. Instalar dependencias:
+## 🖥️ Configuración modo Kiosk (Fullscreen sin escritorio)
+
+Para ejecutar la aplicación en fullscreen por HDMI sin entorno de escritorio:
+
+### Configuración automática (recomendado)
+
+En la Raspberry Pi:
 ```bash
-npm run install:all
+# Copiar el script de configuración
+# (desde tu máquina: scp scripts/setup-kiosk-mode.sh usuario@pi:~/)
+
+# Ejecutar el script
+bash ~/setup-kiosk-mode.sh
+
+# Reiniciar
+sudo reboot
 ```
 
-3. Construir la aplicación:
+El script automáticamente:
+- ✅ Instala X server, Chromium y utilidades mínimas
+- ✅ Configura `.xinitrc` para iniciar solo el navegador
+- ✅ Configura inicio automático en `.bash_profile`
+- ✅ Desactiva screensaver y ahorro de energía
+- ✅ Oculta el cursor del mouse
+
+### Configuración manual
+
+1. **Instalar dependencias mínimas:**
 ```bash
-npm run build
+sudo apt update
+sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit chromium unclutter
 ```
 
-### Configuración de inicio automático
-
-Para que la aplicación se inicie automáticamente en fullscreen al arrancar:
-
-1. Crear un script de inicio:
+2. **Crear archivo `.xinitrc`:**
 ```bash
-sudo nano /etc/systemd/system/fpv-gcs.service
+nano ~/.xinitrc
 ```
 
-2. Agregar el siguiente contenido:
-```ini
-[Unit]
-Description=FPV Copilot GCS
-After=network.target
-
-[Service]
-Environment=NODE_ENV=production
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/FPVCopilotGCS
-ExecStart=/usr/bin/node server/index.js
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. Habilitar y iniciar el servicio:
+Agregar:
 ```bash
-sudo systemctl enable fpv-gcs.service
-sudo systemctl start fpv-gcs.service
+#!/bin/bash
+xset -dpms
+xset s off
+xset s noblank
+unclutter -idle 0 &
+
+cd ~/FPVCopilotGCS
+NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
+
+sleep 8
+
+chromium --kiosk --noerrdialogs --disable-infobars --no-first-run http://localhost:3000
 ```
 
-### Configuración de Chromium en modo Kiosk
-
-1. Editar el archivo de autostart:
 ```bash
-sudo nano /etc/xdg/lxsession/LXDE-pi/autostart
+chmod +x ~/.xinitrc
 ```
 
-2. Agregar estas líneas:
+3. **Configurar inicio automático:**
 ```bash
-@xset s off
-@xset -dpms
-@xset s noblank
-@chromium-browser --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble http://localhost:3000
+nano ~/.bash_profile
 ```
+
+Agregar:
+```bash
+if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+    startx
+fi
+```
+
+4. **Reiniciar:**
+```bash
+sudo reboot
+```
+
+Al reiniciar, verás **solo tu aplicación** en fullscreen. El SSH seguirá disponible.
+
+## 🏗️ Scripts disponibles
+
+```bash
+npm run dev              # Desarrollo (solo en máquina de desarrollo)
+npm run build            # Construir frontend para producción
+npm start                # Iniciar servidor en producción
+npm run install:all      # Instalar todas las dependencias
+```
+
+## 📡 Configuración de conexiones MAVLink
+
+La aplicación soporta tres tipos de conexión:
+
+### 1. Serial (USB/UART)
+- **Puerto**: `/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/serial0`
+- **Baudrate**: 57600, 115200, 921600
+
+### 2. TCP
+- **Modo Cliente**: Conectar a autopiloto como servidor
+- **Modo Servidor**: Esperar conexión del autopiloto
+
+### 3. UDP
+- **Puerto local**: Puerto de escucha
+- **Puerto remoto**: Puerto del autopiloto
+
+Las conexiones se configuran en `Settings > Connections`
 
 ## 📁 Estructura del proyecto
 
 ```
 FPVCopilotGCS/
-├── server/                 # Backend Node.js + Express
-│   └── index.js           # Servidor principal
-├── client/                # Frontend React + Vite
+├── scripts/
+│   └── setup-kiosk-mode.sh       # Script de configuración kiosk
+├── server/
+│   ├── index.js                  # Servidor Express
+│   ├── mavlink-parser.js         # Parser MAVLink
+│   └── mavlink-service.js        # Servicio MAVLink
+├── client/
 │   ├── src/
-│   │   ├── components/    # Componentes React
-│   │   │   ├── TopBar.jsx
-│   │   │   └── MainContent.jsx
+│   │   ├── components/           # Componentes React
+│   │   ├── i18n/                 # Traducciones (en, es)
 │   │   ├── App.jsx
 │   │   └── main.jsx
-│   ├── index.html
+│   ├── dist/                     # Build de producción
 │   └── package.json
-├── package.json           # Dependencias del backend
+├── package.json
 └── README.md
 ```
 
-## 🎨 Interfaz
+## 🛠️ Stack tecnológico
 
-La aplicación cuenta con una interfaz inspirada en Android que incluye:
+### Backend
+- Node.js + Express
+- SerialPort (comunicación serial)
+- net/dgram (TCP/UDP)
 
-- **Barra superior**: Muestra el título de la aplicación, estado de conexión y hora actual
-- **Área de contenido**: Panel con información del drone (estado, señal, batería, GPS)
-- **Diseño responsivo**: Adaptable a diferentes tamaños de pantalla
-- **Efectos visuales**: Glassmorphism y animaciones suaves
+### Frontend
+- React 18 + Vite
+- react-leaflet (mapas)
+- react-i18next (i18n)
+- CSS3 con glassmorphism
 
-## 🛠️ Tecnologías utilizadas
+### Protocolo
+- MAVLink
 
-- Node.js
-- Express
-- React 18
-- Vite
-- CSS3 (con efectos glassmorphism)
+## 🔍 Solución de problemas
 
-## 📝 Notas para desarrollo
+### El servidor no inicia en la Pi
+```bash
+# Verificar logs
+cat ~/fpv-gcs.log
 
-- El backend sirve una API REST en `/api`
-- El frontend se comunica con el backend a través de proxy en desarrollo
-- En producción, Express sirve los archivos estáticos del build de React
+# Verificar puerto 3000
+sudo lsof -i :3000
+```
+
+### No se ven los cambios en la Pi
+```bash
+# Reconstruir en tu máquina
+npm run build
+
+# Copiar client/dist a la Pi
+scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/
+```
+
+### Pantalla en negro al iniciar
+```bash
+# Ver logs de X
+cat ~/.local/share/xorg/Xorg.0.log
+
+# Verificar que Chromium esté instalado
+which chromium
+```
+
+### No se detectan puertos seriales
+```bash
+# Agregar usuario al grupo dialout
+sudo usermod -a -G dialout $USER
+
+# Reiniciar sesión o reboot
+```
+
+## 📝 Roadmap
+
+- [ ] Implementar waypoints y misiones
+- [ ] Comandos de vuelo (Takeoff, Land, RTL, Auto)
+- [ ] Soporte para múltiples vehículos
+- [ ] Grabación de telemetría
+- [ ] Alertas visuales
+- [ ] Temas personalizables
 
 ## 🤝 Contribuir
 
-Este proyecto está en desarrollo activo. Siéntete libre de sugerir mejoras o reportar issues.
+Las contribuciones son bienvenidas:
+
+1. Fork el repositorio
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Commit (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
 ## 📄 Licencia
 
-MIT
+MIT License - ver [LICENSE](LICENSE)
+
+## 👥 Autor
+
+**Amigache** - [GitHub](https://github.com/Amigache)
+
+---
+
+**⚠️ Advertencia**: Proyecto en desarrollo. Prueba en simulador (SITL) antes de usar con hardware real.
+
