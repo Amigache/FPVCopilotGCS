@@ -1,0 +1,249 @@
+{
+  "app": {
+    "title": "FPV Copilot GCS"
+  },
+  "topbar": {
+    "vehicle": "Vehículo",
+    "status": "Estado",
+    "signal": "Señal",
+    "battery": "Batería",
+    "gps": "GPS",
+    "telemetry": "Telemetría",
+    "noTelemetry": "Sin telemetría",
+    "active": "Activa",
+    "inactive": "Inactiva",
+    "settings": "Configuración",
+    "autoConnect": "Auto-conectar con conexiones disponibles",
+    "armed": "Armado",
+    "disarmed": "Desarmado",
+    "signalQuality": {
+      "noSignal": "Sin señal",
+      "excellent": "Excelente",
+      "good": "Buena",
+      "regular": "Regular",
+      "weak": "Débil"
+    },
+    "gpsStatus": {
+      "noGps": "Sin GPS",
+      "noFix": "No Fix",
+      "fix2d": "2D Fix",
+      "fix3d": "3D Fix"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "general": "General",
+    "connections": "Conexiones",
+    "parameters": "Parámetros",
+    "about": "Acerca de"
+  },
+  "general": {
+    "title": "Configuración General",
+    "description": "Configura las preferencias generales de la aplicación",
+    "language": "Idioma",
+    "selectLanguage": "Seleccionar Idioma",
+    "english": "Inglés",
+    "spanish": "Español",
+    "languageInfo": "El idioma se guardará automáticamente y se aplicará en toda la aplicación.",
+    "theme": "Tema",
+    "darkTheme": "Tema Oscuro",
+    "lightTheme": "Tema Claro"
+  },
+  "connections": {
+    "title": "Conexiones",
+    "description": "Configura y gestiona las conexiones MAVLink",
+    "addConnection": "Añadir Conexión",
+    "emptyState": "No hay conexiones configuradas",
+    "emptyStateHint": "Añade una nueva conexión para comenzar",
+    "connect": "Conectar",
+    "disconnect": "Desconectar",
+    "delete": "Eliminar",
+    "connecting": "Conectando...",
+    "newConnection": "Nueva Conexión",
+    "configNotAvailable": "Configuración no disponible",
+    "types": {
+      "serial": "Serial",
+      "tcp": "TCP",
+      "udp": "UDP"
+    },
+    "form": {
+      "name": "Nombre",
+      "namePlaceholder": "Mi Conexión",
+      "type": "Tipo de Conexión",
+      "serialPort": "Puerto Serial",
+      "baudrate": "Baudrate",
+      "mode": "Modo",
+      "client": "Cliente",
+      "server": "Servidor",
+      "ipAddress": "Dirección IP",
+      "port": "Puerto",
+      "localIp": "Dirección IP Local",
+      "localPort": "Puerto Local",
+      "remoteIp": "Dirección IP Remota",
+      "remotePort": "Puerto Remoto",
+      "cancel": "Cancelar",
+      "save": "Guardar"
+    },
+    "messages": {
+      "serverStarted": "✓ Servidor TCP iniciado",
+      "serverListening": "Servidor escuchando en puerto {{port}}. Esperando cliente...",
+      "warning": "Advertencia",
+      "paramsRequestError": "Conectado, pero no se pudieron solicitar parámetros: {{message}}",
+      "error": "Error",
+      "paramsError": "Conectado, pero hubo un error al solicitar los parámetros",
+      "connectionError": "Error de Conexión",
+      "connectionFailed": "No se pudo establecer la conexión",
+      "networkError": "Error de Red",
+      "serverNotAvailable": "No se pudo conectar con el servidor. Verifica que esté funcionando.",
+      "nameRequired": "Por favor ingresa un nombre para la conexión",
+      "disconnected": "Desconectado",
+      "disconnectedSuccess": "La conexión se ha cerrado correctamente",
+      "disconnectError": "No se pudo desconectar"
+    }
+  },
+  "parameters": {
+    "title": "Parámetros del Vehículo",
+    "description": "Configuración de parámetros de Ardupilot",
+    "downloadButton": "📥 Descargar Parámetros",
+    "downloading": "⏳ Descargando...",
+    "searchPlaceholder": "🔍 Buscar parámetro...",
+    "noParameters": "No hay parámetros cargados",
+    "clickToDownload": "Haz clic en \"Descargar Parámetros\" para obtenerlos del vehículo",
+    "noResults": "No se encontraron parámetros",
+    "tryDifferentSearch": "Intenta con otro término de búsqueda",
+    "stats": {
+      "total": "Total",
+      "received": "Recibidos",
+      "progress": "Progreso",
+      "status": "Estado",
+      "complete": "✓ Completo",
+      "downloading": "⏳ Descargando..."
+    },
+    "table": {
+      "parameter": "Parámetro",
+      "type": "Tipo",
+      "value": "Valor",
+      "actions": "Acciones"
+    },
+    "actions": {
+      "edit": "Editar",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "modals": {
+      "downloadComplete": "Descarga Completa",
+      "downloadSuccess": "Se han descargado exitosamente {{count}} parámetros del vehículo.",
+      "noConnection": "Sin Conexión",
+      "noConnectionMessage": "No hay conexión activa con el vehículo. Por favor, establece una conexión desde la sección de Conexiones antes de descargar los parámetros.",
+      "connectionError": "Error de Conexión",
+      "serverConnectionError": "No se pudo conectar con el servidor. Verifica que el servidor esté funcionando.",
+      "parameterUpdated": "Parámetro Actualizado",
+      "parameterUpdateSuccess": "El parámetro {{name}} se ha actualizado correctamente.",
+      "saveError": "Error al Guardar",
+      "parameterUpdateError": "No se pudo actualizar el parámetro.",
+      "saveConnectionError": "No se pudo conectar con el servidor para guardar el parámetro."
+    }
+  },
+  "about": {
+    "title": "Acerca de",
+    "description": "Información sobre el proyecto y el equipo de desarrollo",
+    "version": "Versión",
+    "descriptionTitle": "Descripción",
+    "descriptionText": "FPV Copilot GCS es un sistema de control de tierra diseñado específicamente para Raspberry Pi Zero. Proporciona una interfaz intuitiva tipo Android para monitorear y controlar drones FPV en tiempo real.",
+    "featuresTitle": "Características",
+    "featuresList": {
+      "interface": "Interfaz estilo Android optimizada para pantallas táctiles",
+      "maps": "Visualización de mapas en tiempo real con OpenStreetMap",
+      "telemetry": "Monitoreo de telemetría (señal, batería, GPS)",
+      "connections": "Conexiones múltiples (Serial, WiFi)",
+      "optimized": "Optimizado para Raspberry Pi Zero"
+    },
+    "technologiesTitle": "Tecnologías",
+    "systemInfoTitle": "Información del Sistema",
+    "platform": "Plataforma",
+    "os": "Sistema Operativo",
+    "browser": "Navegador"
+  },
+  "parameterDownload": {
+    "title": "⏬ Descargando Parámetros",
+    "parameters": "parámetros",
+    "complete": "✓ Descarga completa",
+    "continueBackground": "Cerrar (continuar en background)",
+    "cancel": "Cancelar descarga",
+    "cancelling": "Cancelando..."
+  },
+  "modal": {
+    "understood": "Entendido",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar"
+  },
+  "map": {
+    "vehicle": "Vehículo",
+    "status": "Estado",
+    "connected": "✅ Conectado",
+    "disconnected": "❌ Desconectado",
+    "position": "Posición",
+    "altitude": "Altitud",
+    "battery": "Batería",
+    "gps": "GPS",
+    "signal": "Señal",
+    "speed": "Velocidad",
+    "heading": "Rumbo",
+    "controls": {
+      "streetView": "Vista de Calle",
+      "satelliteView": "Vista Satélite",
+      "lockView": "Fijar a Vehículo",
+      "unlockView": "Liberar Vista"
+    },
+    "contextMenu": {
+      "centerHere": "Centrar Aquí",
+      "addWaypoint": "Añadir Waypoint",
+      "copyCoordinates": "Copiar Coordenadas"
+    }
+  },
+  "sidebar": {
+    "activeVehicle": "Vehículo Activo",
+    "noVehicles": "No hay vehículos detectados",
+    "noVehiclesHint": "Establece una conexión para ver los vehículos disponibles",
+    "selectVehicle": "Seleccionar Vehículo",
+    "vehicle": "Vehículo",
+    "vehicleInfo": "Información del Vehículo",
+    "vehicleActions": "Acciones del Vehículo",
+    "status": "Estado",
+    "connected": "✅ Conectado",
+    "disconnected": "❌ Desconectado",
+    "position": "Posición",
+    "altitude": "Altitud",
+    "battery": "Batería",
+    "gpsSatellites": "Satélites GPS",
+    "speed": "Velocidad",
+    "heading": "Rumbo",
+    "actions": {
+      "arm": "Armar",
+      "disarm": "Desarmar",
+      "takeoff": "Despegar",
+      "land": "Aterrizar",
+      "rtl": "Regresar a Casa",
+      "auto": "Modo Auto",
+      "armConfirmTitle": "Confirmar Armado",
+      "armConfirmMessage": "¿Estás seguro de que quieres armar el vehículo? Asegúrate de que el área esté despejada y que todas las verificaciones previas estén completas.",
+      "disarmConfirmTitle": "Confirmar Desarmado",
+      "disarmConfirmMessage": "¿Estás seguro de que quieres desarmar el vehículo? Esto desactivará los motores.",
+      "armSuccess": "Vehículo Armado",
+      "armSuccessMessage": "El vehículo se ha armado exitosamente.",
+      "armError": "Fallo al Armar",
+      "armErrorMessage": "No se pudo armar el vehículo. Verifica las condiciones de pre-armado.",
+      "disarmSuccess": "Vehículo Desarmado",
+      "disarmSuccessMessage": "El vehículo se ha desarmado exitosamente.",
+      "disarmError": "Fallo al Desarmar",
+      "disarmErrorMessage": "No se pudo desarmar el vehículo.",
+      "connectionError": "Error de Conexión",
+      "connectionErrorMessage": "No se pudo conectar con el servidor para ejecutar el comando."
+    }
+  },
+  "keyboard": {
+    "cancel": "Cancelar",
+    "space": "Espacio",
+    "enter": "Enter"
+  }
+}

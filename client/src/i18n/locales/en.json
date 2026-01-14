@@ -1,0 +1,249 @@
+{
+  "app": {
+    "title": "FPV Copilot GCS"
+  },
+  "topbar": {
+    "vehicle": "Vehicle",
+    "status": "Status",
+    "signal": "Signal",
+    "battery": "Battery",
+    "gps": "GPS",
+    "telemetry": "Telemetry",
+    "noTelemetry": "No telemetry",
+    "active": "Active",
+    "inactive": "Inactive",
+    "settings": "Settings",
+    "autoConnect": "Auto-connect with available connections",
+    "armed": "Armed",
+    "disarmed": "Disarmed",
+    "signalQuality": {
+      "noSignal": "No signal",
+      "excellent": "Excellent",
+      "good": "Good",
+      "regular": "Regular",
+      "weak": "Weak"
+    },
+    "gpsStatus": {
+      "noGps": "No GPS",
+      "noFix": "No Fix",
+      "fix2d": "2D Fix",
+      "fix3d": "3D Fix"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "connections": "Connections",
+    "parameters": "Parameters",
+    "about": "About Us"
+  },
+  "general": {
+    "title": "General Settings",
+    "description": "Configure general application preferences",
+    "language": "Language",
+    "selectLanguage": "Select Language",
+    "english": "English",
+    "spanish": "Spanish",
+    "languageInfo": "The language will be saved automatically and applied throughout the application.",
+    "theme": "Theme",
+    "darkTheme": "Dark Theme",
+    "lightTheme": "Light Theme"
+  },
+  "connections": {
+    "title": "Connections",
+    "description": "Configure and manage MAVLink connections",
+    "addConnection": "Add Connection",
+    "emptyState": "No connections configured",
+    "emptyStateHint": "Add a new connection to get started",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "delete": "Delete",
+    "connecting": "Connecting...",
+    "newConnection": "New Connection",
+    "configNotAvailable": "Configuration not available",
+    "types": {
+      "serial": "Serial",
+      "tcp": "TCP",
+      "udp": "UDP"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "My Connection",
+      "type": "Connection Type",
+      "serialPort": "Serial Port",
+      "baudrate": "Baudrate",
+      "mode": "Mode",
+      "client": "Client",
+      "server": "Server",
+      "ipAddress": "IP Address",
+      "port": "Port",
+      "localIp": "Local IP Address",
+      "localPort": "Local Port",
+      "remoteIp": "Remote IP Address",
+      "remotePort": "Remote Port",
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "messages": {
+      "serverStarted": "✓ TCP Server started",
+      "serverListening": "Server listening on port {{port}}. Waiting for client...",
+      "warning": "Warning",
+      "paramsRequestError": "Connected, but could not request parameters: {{message}}",
+      "error": "Error",
+      "paramsError": "Connected, but there was an error requesting parameters",
+      "connectionError": "Connection Error",
+      "connectionFailed": "Could not establish connection",
+      "networkError": "Network Error",
+      "serverNotAvailable": "Could not connect to the server. Verify that it is running.",
+      "nameRequired": "Please enter a name for the connection",
+      "disconnected": "Disconnected",
+      "disconnectedSuccess": "The connection has been closed successfully",
+      "disconnectError": "Could not disconnect"
+    }
+  },
+  "parameters": {
+    "title": "Vehicle Parameters",
+    "description": "Ardupilot parameter configuration",
+    "downloadButton": "📥 Download Parameters",
+    "downloading": "⏳ Downloading...",
+    "searchPlaceholder": "🔍 Search parameter...",
+    "noParameters": "No parameters loaded",
+    "clickToDownload": "Click \"Download Parameters\" to get them from the vehicle",
+    "noResults": "No parameters found",
+    "tryDifferentSearch": "Try a different search term",
+    "stats": {
+      "total": "Total",
+      "received": "Received",
+      "progress": "Progress",
+      "status": "Status",
+      "complete": "✓ Complete",
+      "downloading": "⏳ Downloading..."
+    },
+    "table": {
+      "parameter": "Parameter",
+      "type": "Type",
+      "value": "Value",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "modals": {
+      "downloadComplete": "Download Complete",
+      "downloadSuccess": "Successfully downloaded {{count}} vehicle parameters.",
+      "noConnection": "No Connection",
+      "noConnectionMessage": "There is no active connection to the vehicle. Please establish a connection from the Connections section before downloading parameters.",
+      "connectionError": "Connection Error",
+      "serverConnectionError": "Could not connect to the server. Verify that the server is running.",
+      "parameterUpdated": "Parameter Updated",
+      "parameterUpdateSuccess": "Parameter {{name}} has been updated successfully.",
+      "saveError": "Save Error",
+      "parameterUpdateError": "Could not update the parameter.",
+      "saveConnectionError": "Could not connect to the server to save the parameter."
+    }
+  },
+  "about": {
+    "title": "About Us",
+    "description": "Information about the project and development team",
+    "version": "Version",
+    "descriptionTitle": "Description",
+    "descriptionText": "FPV Copilot GCS is a ground control system designed specifically for Raspberry Pi Zero. It provides an intuitive Android-style interface for real-time monitoring and control of FPV drones.",
+    "featuresTitle": "Features",
+    "featuresList": {
+      "interface": "Android-style interface optimized for touchscreens",
+      "maps": "Real-time map visualization with OpenStreetMap",
+      "telemetry": "Telemetry monitoring (signal, battery, GPS)",
+      "connections": "Multiple connections (Serial, WiFi)",
+      "optimized": "Optimized for Raspberry Pi Zero"
+    },
+    "technologiesTitle": "Technologies",
+    "systemInfoTitle": "System Information",
+    "platform": "Platform",
+    "os": "Operating System",
+    "browser": "Browser"
+  },
+  "parameterDownload": {
+    "title": "⏬ Downloading Parameters",
+    "parameters": "parameters",
+    "complete": "✓ Download complete",
+    "continueBackground": "Close (continue in background)",
+    "cancel": "Cancel download",
+    "cancelling": "Cancelling..."
+  },
+  "modal": {
+    "understood": "Understood",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "map": {
+    "vehicle": "Vehicle",
+    "status": "Status",
+    "connected": "✅ Connected",
+    "disconnected": "❌ Disconnected",
+    "position": "Position",
+    "altitude": "Altitude",
+    "battery": "Battery",
+    "gps": "GPS",
+    "signal": "Signal",
+    "speed": "Speed",
+    "heading": "Heading",
+    "controls": {
+      "streetView": "Street View",
+      "satelliteView": "Satellite View",
+      "lockView": "Lock to Vehicle",
+      "unlockView": "Unlock View"
+    },
+    "contextMenu": {
+      "centerHere": "Center Here",
+      "addWaypoint": "Add Waypoint",
+      "copyCoordinates": "Copy Coordinates"
+    }
+  },
+  "sidebar": {
+    "activeVehicle": "Active Vehicle",
+    "noVehicles": "No vehicles detected",
+    "noVehiclesHint": "Establish a connection to view available vehicles",
+    "selectVehicle": "Select Vehicle",
+    "vehicle": "Vehicle",
+    "vehicleInfo": "Vehicle Information",
+    "vehicleActions": "Vehicle Actions",
+    "status": "Status",
+    "connected": "✅ Connected",
+    "disconnected": "❌ Disconnected",
+    "position": "Position",
+    "altitude": "Altitude",
+    "battery": "Battery",
+    "gpsSatellites": "GPS Satellites",
+    "speed": "Speed",
+    "heading": "Heading",
+    "actions": {
+      "arm": "Arm",
+      "disarm": "Disarm",
+      "takeoff": "Takeoff",
+      "land": "Land",
+      "rtl": "Return Home",
+      "auto": "Auto Mode",
+      "armConfirmTitle": "Confirm Arm",
+      "armConfirmMessage": "Are you sure you want to arm the vehicle? Make sure the area is clear and all pre-flight checks are complete.",
+      "disarmConfirmTitle": "Confirm Disarm",
+      "disarmConfirmMessage": "Are you sure you want to disarm the vehicle? This will disable the motors.",
+      "armSuccess": "Vehicle Armed",
+      "armSuccessMessage": "The vehicle has been armed successfully.",
+      "armError": "Arm Failed",
+      "armErrorMessage": "Could not arm the vehicle. Check pre-arm conditions.",
+      "disarmSuccess": "Vehicle Disarmed",
+      "disarmSuccessMessage": "The vehicle has been disarmed successfully.",
+      "disarmError": "Disarm Failed",
+      "disarmErrorMessage": "Could not disarm the vehicle.",
+      "connectionError": "Connection Error",
+      "connectionErrorMessage": "Could not connect to the server to execute the command."
+    }
+  },
+  "keyboard": {
+    "cancel": "Cancel",
+    "space": "Space",
+    "enter": "Enter"
+  }
+}

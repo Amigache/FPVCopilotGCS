@@ -1,0 +1,14 @@
+.language-info {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(33, 150, 243, 0.1);
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+}
+
+.info-text {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+}

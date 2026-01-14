@@ -1,0 +1,32 @@
+{
+  "name": "fpv-copilot-gcs",
+  "version": "1.0.0",
+  "description": "FPV Copilot Ground Control Station for Raspberry Pi Zero",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "nodemon server/index.js",
+    "client:dev": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js",
+    "install:all": "npm install && cd client && npm install"
+  },
+  "keywords": [
+    "fpv",
+    "raspberry-pi",
+    "ground-control-station"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-mavlink": "^2.3.0",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
+  }
+}
