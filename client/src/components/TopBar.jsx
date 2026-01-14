@@ -4,6 +4,10 @@ import './TopBar.css'
 
 function TopBar({ onSettingsClick, isSettingsOpen }) {
   const { t } = useTranslation()
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('es-ES', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  }))
   const [telemetry, setTelemetry] = useState({
     signal: 'N/A',
     battery: 'N/A',
@@ -13,6 +17,17 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
   const [hasTelemetry, setHasTelemetry] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString('es-ES', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }))
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   // Verificar estado de conexión
   useEffect(() => {
@@ -253,6 +268,7 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
             {connecting ? '⏳' : '🔌'}
           </button>
         )}
+        <div className="time">{currentTime}</div>
         <button 
           className={`settings-button ${isSettingsOpen ? 'active' : ''}`}
           onClick={onSettingsClick}
