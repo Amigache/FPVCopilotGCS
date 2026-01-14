@@ -118,24 +118,32 @@ En la Raspberry Pi:
 # Ejecutar el script
 bash ~/setup-kiosk-mode.sh
 
+# Asegurarte de tener el build del frontend
+# (desde tu máquina: scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/)
+
 # Reiniciar
 sudo reboot
 ```
 
 El script automáticamente:
-- ✅ Instala X server, Chromium y utilidades mínimas
+- ✅ Instala X server, **Midori** (navegador ligero) y utilidades mínimas
 - ✅ Configura `.xinitrc` para iniciar solo el navegador
 - ✅ Configura inicio automático en `.bash_profile`
+- ✅ **Configura autologin en tty1** (crítico para inicio automático)
 - ✅ Desactiva screensaver y ahorro de energía
 - ✅ Oculta el cursor del mouse
+
+**Nota**: Se usa **Midori** en lugar de Chromium porque es mucho más ligero y eficiente para Raspberry Pi Zero (ARMv6, 512MB RAM).
 
 ### Configuración manual
 
 1. **Instalar dependencias mínimas:**
 ```bash
 sudo apt update
-sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit chromium unclutter
+sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit midori unclutter
 ```
+
+**Nota**: Se usa Midori en lugar de Chromium porque es mucho más eficiente en Pi Zero.
 
 2. **Crear archivo `.xinitrc`:**
 ```bash
@@ -153,9 +161,9 @@ unclutter -idle 0 &
 cd ~/FPVCopilotGCS
 NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
 
-sleep 8
+sleep 10
 
-chromium --kiosk --noerrdialogs --disable-infobars --no-first-run http://localhost:3000
+midori -e Fullscreen -a http://localhost:3000
 ```
 
 ```bash
@@ -174,7 +182,24 @@ if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
 fi
 ```
 
-4. **Reiniciar:**
+4. **Configurar autologin en tty1:**
+```bash
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
+sudo nano /etc/systemd/system/getty@tty1.service.d/autologin.conf
+```
+
+Agregar:
+```ini
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin tu_usuario --noclear %I $TERM
+```
+
+```bash
+sudo systemctl daemon-reload
+```
+
+5. **Reiniciar:**
 ```bash
 sudo reboot
 ```
@@ -271,8 +296,29 @@ scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/
 # Ver logs de X
 cat ~/.local/share/xorg/Xorg.0.log
 
-# Verificar que Chromium esté instalado
-which chromium
+# Verificar que Midori esté instalado
+which midori
+
+# Verificar autologin
+cat /etc/systemd/system/getty@tty1.service.d/autologin.conf
+
+# Probar Midori manualmente desde SSH
+DISPLAY=:0 midori http://localhost:3000 &
+```
+
+### La aplicación no inicia automáticamente
+```bash
+# Verificar que estás en tty1 (no SSH)
+tty
+
+# Si no hay autologin configurado
+sudo raspi-config
+# System Options > Boot / Auto Login > Console Autologin
+
+# O manualmente:
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
+sudo nano /etc/systemd/system/getty@tty1.service.d/autologin.conf
+# Agregar la configuración y reiniciar
 ```
 
 ### No se detectan puertos seriales

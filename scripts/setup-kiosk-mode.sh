@@ -19,7 +19,7 @@ sudo apt install -y --no-install-recommends \
     xserver-xorg \
     x11-xserver-utils \
     xinit \
-    chromium \
+    midori \
     unclutter
 
 echo "✅ Dependencias instaladas"
@@ -44,19 +44,10 @@ NODE_ENV=production npm start > ~/fpv-gcs.log 2>&1 &
 
 # Esperar a que el servidor esté listo
 echo "Esperando a que el servidor inicie..."
-sleep 8
+sleep 10
 
-# Abrir Chromium en modo kiosk (pantalla completa sin controles)
-chromium \
-    --kiosk \
-    --noerrdialogs \
-    --disable-infobars \
-    --disable-session-crashed-bubble \
-    --no-first-run \
-    --disable-translate \
-    --disable-features=TranslateUI \
-    --disk-cache-dir=/tmp/chromium-cache \
-    http://localhost:3000
+# Abrir Midori en modo fullscreen (más ligero y eficiente para Pi Zero)
+midori -e Fullscreen -a http://localhost:3000
 EOF
 
 chmod +x "$HOME_DIR/.xinitrc"
@@ -87,7 +78,22 @@ fi
 
 echo ""
 
-# 4. Verificar que la aplicación existe
+# 4. Configurar autologin en tty1
+echo "🔐 Configurando autologin en tty1..."
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
+
+cat << EOF | sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $CURRENT_USER --noclear %I \$TERM
+EOF
+
+sudo systemctl daemon-reload
+echo "✅ Autologin configurado para $CURRENT_USER"
+
+echo ""
+
+# 5. Verificar que la aplicación existe
 if [ ! -d "$HOME_DIR/FPVCopilotGCS" ]; then
     echo "⚠️  ADVERTENCIA: No se encontró el directorio FPVCopilotGCS"
     echo "   Asegúrate de clonar el repositorio en $HOME_DIR/FPVCopilotGCS"
@@ -99,11 +105,14 @@ echo "✅ Configuración completada!"
 echo ""
 echo "📋 Próximos pasos:"
 echo "   1. Asegúrate de que FPVCopilotGCS esté en $HOME_DIR/FPVCopilotGCS"
-echo "   2. Verifica que 'npm install' se haya ejecutado correctamente"
-echo "   3. Reinicia la Raspberry Pi: sudo reboot"
+echo "   2. Verifica que 'npm install --omit=dev' se haya ejecutado"
+echo "   3. Copia la carpeta client/dist desde tu máquina de desarrollo:"
+echo "      scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/"
+echo "   4. Reinicia la Raspberry Pi: sudo reboot"
 echo ""
-echo "🌐 Al reiniciar, verás la aplicación en fullscreen por HDMI"
-echo "🔌 Para acceder por SSH, conéctate normalmente (la consola seguirá disponible)"
+echo "🌐 Al reiniciar, la Pi hará autologin y verás la aplicación en fullscreen"
+echo "🔌 Para acceder por SSH, usa otro terminal (la consola estará en X)"
 echo ""
 echo "📝 Logs del servidor en: ~/fpv-gcs.log"
+echo "📝 Logs de X en: ~/.local/share/xorg/Xorg.0.log"
 echo ""
