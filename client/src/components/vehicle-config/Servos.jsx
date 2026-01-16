@@ -66,7 +66,7 @@ const SERVO_FUNCTIONS = {
   129: 'ProfiLEDClock'
 }
 
-const Servos = forwardRef(({ systemId }, ref) => {
+const Servos = forwardRef(({ systemId, vehicle }, ref) => {
   const { t } = useTranslation()
   const notify = useNotification()
   const [servoOutputs, setServoOutputs] = useState({})

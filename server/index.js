@@ -2,13 +2,39 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import mavlinkService from './mavlink-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173',
+    methods: ['GET', 'POST']
+  }
+});
+
 const PORT = process.env.PORT || 3000;
+
+// Configurar Socket.IO en mavlink-service
+mavlinkService.setSocketIO(io);
+
+// Socket.IO connection handler
+io.on('connection', (socket) => {
+  console.log('🔌 Cliente WebSocket conectado:', socket.id);
+  
+  // Enviar estado actual al conectarse
+  socket.emit('connection_status', mavlinkService.getStatus());
+  socket.emit('vehicles_update', mavlinkService.getAllVehicles());
+  
+  socket.on('disconnect', () => {
+    console.log('🔌 Cliente WebSocket desconectado:', socket.id);
+  });
+});
 
 // Middleware
 app.use(cors());
@@ -137,6 +163,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket server ready`);
 });

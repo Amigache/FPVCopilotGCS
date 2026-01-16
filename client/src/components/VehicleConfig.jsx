@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import './VehicleConfig.css'
 import Parameters from './vehicle-config/Parameters'
@@ -7,14 +7,27 @@ import FlightModes from './vehicle-config/FlightModes'
 import SerialPorts from './vehicle-config/SerialPorts'
 import UnifiedModal from './UnifiedModal'
 import { useNotification } from '../contexts/NotificationContext'
+import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 function VehicleConfig({ systemId, onClose }) {
   const { t } = useTranslation()
   const notify = useNotification()
+  const { vehicles, connectionStatus } = useWebSocketContext()
   const [activeTab, setActiveTab] = useState('flightModes')
   const [pendingTab, setPendingTab] = useState(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  // Obtener los datos del vehículo seleccionado
+  const selectedVehicle = vehicles.find(v => v.systemId === systemId)
+
+  useEffect(() => {
+    // Si el vehículo ya no está disponible o se perdió la conexión, cerrar la configuración
+    if (!connectionStatus?.connected || !selectedVehicle) {
+      notify.warning(t('reconnect.connectionLost'))
+      onClose()
+    }
+  }, [connectionStatus?.connected, selectedVehicle, notify, onClose, t])
   
   // Refs para acceder a los métodos de los componentes hijos
   const flightModesRef = useRef(null)
@@ -149,15 +162,15 @@ function VehicleConfig({ systemId, onClose }) {
   const renderContent = () => {
     switch (activeTab) {
       case 'flightModes':
-        return <FlightModes ref={flightModesRef} systemId={systemId} />
+        return <FlightModes ref={flightModesRef} systemId={systemId} vehicle={selectedVehicle} />
       case 'serialPorts':
-        return <SerialPorts ref={serialPortsRef} systemId={systemId} />
+        return <SerialPorts ref={serialPortsRef} systemId={systemId} vehicle={selectedVehicle} />
       case 'parameters':
         return <Parameters systemId={systemId} />
       case 'servos':
-        return <Servos ref={servosRef} systemId={systemId} />
+        return <Servos ref={servosRef} systemId={systemId} vehicle={selectedVehicle} />
       default:
-        return <FlightModes ref={flightModesRef} systemId={systemId} />
+        return <FlightModes ref={flightModesRef} systemId={systemId} vehicle={selectedVehicle} />
     }
   }
 

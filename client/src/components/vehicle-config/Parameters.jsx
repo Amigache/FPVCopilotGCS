@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './common.css'
 import './Parameters.css'
@@ -12,12 +12,16 @@ function Parameters() {
   const { getAllParameters, setParameter, requestParameters: ctxRequestParameters, parameterStats, isConnected, loadParameters: ctxLoadParameters } = useParameters()
   const [filteredParams, setFilteredParams] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [editingParam, setEditingParam] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', fieldType: 'search', initialValue: '', keyboardType: 'text' })
+  const autoDownloadAttempted = useRef(false)
 
   useEffect(() => {
+    // Reiniciar el ref cuando el componente se monta
+    autoDownloadAttempted.current = false
     loadParameters()
   }, [])
 
@@ -25,41 +29,77 @@ function Parameters() {
     filterParameters()
   }, [searchTerm])
 
+  useEffect(() => {
+    // Auto-descargar parámetros solo una vez si no hay suficientes
+    if (isConnected && parameterStats.total === 0 && !downloading && !autoDownloadAttempted.current) {
+      autoDownloadAttempted.current = true
+      requestParameters(true) // true = es descarga automática
+    }
+  }, [isConnected, parameterStats.total, downloading])
+
   const loadParameters = async () => {
+    setLoading(true)
     await ctxLoadParameters()
+    setLoading(false)
   }
 
-  const requestParameters = async () => {
-    setLoading(true)
+  const requestParameters = async (isAutomatic = false) => {
+    setDownloading(true)
     try {
       const result = await ctxRequestParameters()
       
       if (result.success) {
         // Polling para actualizar el progreso en tiempo real
-        const pollInterval = setInterval(() => {
-          // El contexto ya está actualizando los parámetros automáticamente
-          
-          // Si está completo, detener el polling
+        let lastReceived = 0
+        const pollInterval = setInterval(async () => {
+          // Verificar si la descarga está completa
           if (parameterStats.complete && parameterStats.total > 0) {
             clearInterval(pollInterval)
-            setLoading(false)
-            notify.success(t('parameters.modals.downloadSuccess', { count: parameterStats.total }))
+            setDownloading(false)
+            // Cargar los parámetros descargados
+            await loadParameters()
+            if (!isAutomatic) {
+              notify.success(t('parameters.modals.downloadSuccess', { count: parameterStats.total }))
+            }
+            return
           }
-        }, 200) // Actualizar cada 200ms para ver el progreso
+          
+          // Detectar si hubo progreso en los últimos 2 segundos
+          // Si no, probablemente se completó pero no lo sabemos aún
+          if (parameterStats.received > 0 && parameterStats.total > 0) {
+            if (parameterStats.received === lastReceived && parameterStats.received === parameterStats.total) {
+              // No hubo cambio y todos fueron recibidos
+              clearInterval(pollInterval)
+              setDownloading(false)
+              // Cargar los parámetros descargados
+              await loadParameters()
+              if (!isAutomatic) {
+                notify.success(t('parameters.modals.downloadSuccess', { count: parameterStats.total }))
+              }
+              return
+            }
+            lastReceived = parameterStats.received
+          }
+        }, 500) // Actualizar cada 500ms
         
         // Timeout de seguridad (30 segundos)
         setTimeout(() => {
           clearInterval(pollInterval)
-          setLoading(false)
+          setDownloading(false)
         }, 30000)
       } else {
-        notify.warning(result.message || t('parameters.modals.noConnectionMessage'))
-        setLoading(false)
+        // Solo mostrar error si es descarga manual
+        if (!isAutomatic) {
+          notify.warning(result.message || t('parameters.modals.noConnectionMessage'))
+        }
+        setDownloading(false)
       }
     } catch (error) {
       console.error('Error solicitando parámetros:', error)
-      notify.error(t('parameters.modals.serverConnectionError'))
-      setLoading(false)
+      if (!isAutomatic) {
+        notify.error(t('parameters.modals.serverConnectionError'))
+      }
+      setDownloading(false)
     }
   }
 
@@ -115,17 +155,24 @@ function Parameters() {
         <div className="header-right">
           <button 
             className="download-button" 
-            onClick={requestParameters}
-            disabled={loading}
+            onClick={() => requestParameters(false)}
+            disabled={downloading || loading}
           >
-            {loading ? t('parameters.downloading') : t('parameters.downloadButton')}
+            {downloading ? t('parameters.downloading') : t('parameters.downloadButton')}
           </button>
         </div>
       </div>
 
-      {isConnected && parameterStats.total > 0 && (
-        <div className="param-stats">
-          <div className="stat-item">
+      {loading ? (
+        <div className="loading-container">
+          <div className="spinner"></div>
+          <p>{t('parameters.loading')}</p>
+        </div>
+      ) : (
+        <>
+          {isConnected && parameterStats.total > 0 && (
+            <div className="param-stats">
+              <div className="stat-item">
             <span className="stat-label">{t('parameters.stats.total')}:</span>
             <span className="stat-value">{parameterStats.total}</span>
           </div>
@@ -246,22 +293,24 @@ function Parameters() {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      <OnScreenKeyboard
-        isOpen={keyboard.isOpen}
-        onClose={() => setKeyboard({ ...keyboard, isOpen: false })}
-        onSubmit={(value) => {
-          if (keyboard.fieldType === 'search') {
-            setSearchTerm(value)
-          } else if (keyboard.fieldType === 'edit') {
-            setEditValue(value)
-          }
-        }}
-        fieldName={keyboard.fieldName}
-        initialValue={keyboard.initialValue}
-        keyboardType={keyboard.keyboardType}
-      />
+        <OnScreenKeyboard
+            isOpen={keyboard.isOpen}
+            onClose={() => setKeyboard({ ...keyboard, isOpen: false })}
+            onSubmit={(value) => {
+              if (keyboard.fieldType === 'search') {
+                setSearchTerm(value)
+              } else if (keyboard.fieldType === 'edit') {
+                setEditValue(value)
+              }
+            }}
+            fieldName={keyboard.fieldName}
+            initialValue={keyboard.initialValue}
+            keyboardType={keyboard.keyboardType}
+          />
+        </>
+      )}
     </div>
   )
 }

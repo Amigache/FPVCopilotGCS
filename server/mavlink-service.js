@@ -16,6 +16,17 @@ class MAVLinkService {
     this.tcpClient = null
     this.tcpServer = null
     this.udpSocket = null
+    this.io = null // Socket.IO instance
+    
+    // Throttling para WebSocket (evitar saturar con actualizaciones)
+    this.lastEmit = {
+      vehicles: 0,
+      parameters: 0
+    }
+    this.emitInterval = {
+      vehicles: 100, // Emitir vehículos máximo cada 100ms (10 Hz)
+      parameters: 500 // Emitir parámetros máximo cada 500ms (2 Hz)
+    }
     
     // Parser de mensajes MAVLink
     this.parser = new MAVLinkParser()
@@ -26,6 +37,58 @@ class MAVLinkService {
     // Mensajes del sistema (STATUSTEXT y eventos)
     this.messages = []
     this.maxMessages = 100 // Mantener últimos 100 mensajes
+  }
+
+  // Configurar Socket.IO para emitir eventos en tiempo real
+  setSocketIO(io) {
+    this.io = io
+    console.log('✅ Socket.IO configurado en MAVLink Service')
+  }
+
+  // Emitir actualización de vehículos por WebSocket (con throttling)
+  emitVehiclesUpdate() {
+    if (!this.io) return
+    
+    const now = Date.now()
+    if (now - this.lastEmit.vehicles < this.emitInterval.vehicles) {
+      return // Throttle: demasiado pronto
+    }
+    
+    this.lastEmit.vehicles = now
+    const vehicles = this.getAllVehicles()
+    this.io.emit('vehicles_update', vehicles)
+  }
+
+  // Emitir actualización de estado de conexión
+  emitConnectionStatus() {
+    if (this.io) {
+      this.io.emit('connection_status', this.getStatus())
+    }
+  }
+
+  // Emitir nuevo mensaje del sistema
+  emitMessage(message) {
+    if (this.io) {
+      this.io.emit('system_message', message)
+    }
+  }
+
+  // Emitir actualización de parámetros (con throttling)
+  emitParametersUpdate() {
+    if (!this.io) return
+    
+    const now = Date.now()
+    if (now - this.lastEmit.parameters < this.emitInterval.parameters) {
+      return // Throttle: demasiado pronto
+    }
+    
+    this.lastEmit.parameters = now
+    this.io.emit('parameters_update', {
+      count: this.paramCount,
+      received: this.receivedParams,
+      complete: this.paramDownloadComplete,
+      progress: this.paramCount > 0 ? (this.receivedParams / this.paramCount) * 100 : 0
+    })
   }
 
   // Método centralizado para enviar datos por cualquier canal (Serial, TCP, UDP)
@@ -76,6 +139,9 @@ class MAVLinkService {
       
       this.isConnected = true
       
+      // Emitir cambio de estado de conexión
+      this.emitConnectionStatus()
+      
       return { 
         success: true, 
         message: 'Conectado exitosamente',
@@ -118,6 +184,9 @@ class MAVLinkService {
         this.tcpClient.on('close', () => {
           console.log('MAVLink TCP: Conexión cerrada')
           this.isConnected = false
+          this.vehicles.clear()
+          this.emitVehiclesUpdate()
+          this.emitConnectionStatus()
         })
 
       } else {
@@ -139,6 +208,9 @@ class MAVLinkService {
           socket.on('close', () => {
             console.log('MAVLink TCP: Cliente desconectado')
             this.isConnected = false
+            this.vehicles.clear()
+            this.emitVehiclesUpdate()
+            this.emitConnectionStatus()
           })
         })
 
@@ -215,6 +287,9 @@ class MAVLinkService {
           text: `Vehicle #${sysId} connected - Type: ${this.getVehicleTypeName(data.type)}`,
           timestamp: Date.now()
         })
+        
+        // Emitir actualización de vehículos
+        this.emitVehiclesUpdate()
       }
       
       // Actualizar última vez visto y base_mode
@@ -309,6 +384,9 @@ class MAVLinkService {
           this.parameters.set(data.param_id, data.param_value)
           this.receivedParams = this.parameters.size
           
+          // Emitir actualización de parámetros (con throttling)
+          this.emitParametersUpdate()
+          
           // Solo mostrar logs durante la descarga inicial
           if (!this.paramDownloadComplete) {
             // Log más frecuente para diagnóstico
@@ -317,6 +395,8 @@ class MAVLinkService {
             
             if (this.receivedParams === this.paramCount) {
               this.paramDownloadComplete = true
+              // Emitir actualización final
+              this.emitParametersUpdate()
             }
           }
           break
@@ -341,6 +421,9 @@ class MAVLinkService {
       }
       
       vehicle.lastUpdate = Date.now()
+      
+      // Emitir actualización de vehículos (con throttling)
+      this.emitVehiclesUpdate()
     }
   }
 
@@ -364,6 +447,9 @@ class MAVLinkService {
     }
     
     console.log(`✅ [SysID ${message.systemId}] [${message.type.toUpperCase()}] ${message.text}`)
+    
+    // Emitir mensaje por WebSocket
+    this.emitMessage(message)
   }
 
   // Obtener mensajes
@@ -471,19 +557,28 @@ class MAVLinkService {
     this.connection = null
     this.connectionType = null
     this.parameters.clear()
+    this.vehicles.clear()
+    
+    // Emitir cambio de estado de conexión
+    this.emitVehiclesUpdate()
+    this.emitConnectionStatus()
   }
 
   // Solicitar todos los parámetros del vehículo
   async requestParameters() {
     try {
-      if (!this.isConnected) {
-        throw new Error('No hay conexión activa')
+      // Verificar que haya vehículos conectados o conexión TCP/UDP abierta
+      const hasVehicles = this.vehicles.size > 0
+      const hasConnection = this.tcpClient || this.udpSocket
+      
+      if (!hasConnection) {
+        throw new Error('No hay conexión activa con el vehículo. Establece una conexión en la sección de Conexiones.')
       }
 
-      // Verificar que haya un cliente para enviar datos
-      const canSend = this.tcpClient || this.udpSocket
-      if (!canSend) {
-        throw new Error('No hay cliente de comunicación activo')
+      // Si no hay vehículos conectados, intentar de todas formas (el vehículo podría estar conectándose)
+      if (!hasVehicles && !this.isConnected) {
+        console.log('⏳ Esperando heartbeat del vehículo... retentando solicitud de parámetros')
+        // Intentar de todas formas - el heartbeat podría llegar en breve
       }
 
       this.parameters.clear()

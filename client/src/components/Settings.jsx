@@ -5,7 +5,7 @@ import General from './settings/General'
 import Connections from './settings/Connections'
 import AboutUs from './settings/AboutUs'
 
-function Settings() {
+function Settings({ onClose }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('general')
 
@@ -31,7 +31,12 @@ function Settings() {
   return (
     <div className="settings-container">
       <div className="settings-sidebar">
-        <h2 className="settings-title">{t('settings.title')}</h2>
+        <div className="settings-header">
+          <h2 className="settings-title">{t('settings.title')}</h2>
+          <button className="close-button" onClick={onClose} title={t('vehicleConfig.close')}>
+            ✕
+          </button>
+        </div>
         <nav className="settings-menu">
           {menuItems.map(item => (
             <button

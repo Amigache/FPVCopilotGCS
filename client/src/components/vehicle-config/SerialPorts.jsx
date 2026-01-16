@@ -5,7 +5,7 @@ import useVehicleConfigSection from '../../hooks/useVehicleConfigSection'
 import './common.css'
 import './SerialPorts.css'
 
-const SerialPorts = forwardRef(({ systemId }, ref) => {
+const SerialPorts = forwardRef(({ systemId, vehicle }, ref) => {
   const { t } = useTranslation()
   const notify = useNotification()
   const [serialPorts, setSerialPorts] = useState([])

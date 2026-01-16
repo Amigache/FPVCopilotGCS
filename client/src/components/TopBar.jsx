@@ -1,31 +1,36 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useWebSocketContext } from '../contexts/WebSocketContext'
+import ParameterDownloadModal from './ParameterDownloadModal'
 import './TopBar.css'
 
 function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
+  const { 
+    selectedVehicle, 
+    selectedVehicleId, 
+    setSelectedVehicleId, 
+    vehicles, 
+    connectionStatus 
+  } = useWebSocketContext()
+  
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('es-ES', { 
     hour: '2-digit', 
     minute: '2-digit' 
   }))
-  const [telemetry, setTelemetry] = useState({
-    signal: 'N/A',
-    battery: 'N/A',
-    gps: 'N/A',
-    armed: false,
-    flightMode: 'N/A',
-    systemId: null,
-    custom_mode: 0,
-    vehicleType: null
-  })
-  const [hasTelemetry, setHasTelemetry] = useState(false)
   const [connecting, setConnecting] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
+  const [showParamDownload, setShowParamDownload] = useState(false)
   const [showFlightModeDropdown, setShowFlightModeDropdown] = useState(false)
   const [availableFlightModes, setAvailableFlightModes] = useState({})
   const [showArmDropdown, setShowArmDropdown] = useState(false)
+  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
   const dropdownRef = useRef(null)
   const armDropdownRef = useRef(null)
+  const vehicleDropdownRef = useRef(null)
+
+  // Estado de conexión desde WebSocket
+  const isConnected = connectionStatus?.connected || false
+  const hasTelemetry = selectedVehicle !== null
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -38,23 +43,6 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     return () => clearInterval(timer)
   }, [])
 
-  // Verificar estado de conexión
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const response = await fetch('/api/mavlink/status')
-        const result = await response.json()
-        setIsConnected(result.connected)
-      } catch (error) {
-        setIsConnected(false)
-      }
-    }
-    
-    checkConnection()
-    const interval = setInterval(checkConnection, 500)
-    return () => clearInterval(interval)
-  }, [])
-
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -64,13 +52,16 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
       if (armDropdownRef.current && !armDropdownRef.current.contains(event.target)) {
         setShowArmDropdown(false)
       }
+      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(event.target)) {
+        setShowVehicleDropdown(false)
+      }
     }
 
-    if (showFlightModeDropdown || showArmDropdown) {
+    if (showFlightModeDropdown || showArmDropdown || showVehicleDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showFlightModeDropdown, showArmDropdown])
+  }, [showFlightModeDropdown, showArmDropdown, showVehicleDropdown])
 
   const getFlightModesForVehicleType = (vehicleType) => {
     if (vehicleType === 1) {
@@ -98,6 +89,8 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   }
 
   const handleFlightModeChange = async (customMode) => {
+    if (!selectedVehicleId) return
+    
     try {
       const response = await fetch('/api/mavlink/flightmode', {
         method: 'POST',
@@ -105,7 +98,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          systemId: telemetry.systemId,
+          systemId: selectedVehicleId,
           customMode: parseInt(customMode)
         })
       })
@@ -120,121 +113,67 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   const handleArmClick = () => {
     setShowArmDropdown(false)
-    if (onArmDisarmRequest && telemetry.systemId) {
-      onArmDisarmRequest('arm', telemetry.systemId)
+    if (onArmDisarmRequest && selectedVehicleId) {
+      onArmDisarmRequest('arm', selectedVehicleId)
     }
   }
 
   const handleDisarmClick = () => {
     setShowArmDropdown(false)
-    if (onArmDisarmRequest && telemetry.systemId) {
-      onArmDisarmRequest('disarm', telemetry.systemId)
+    if (onArmDisarmRequest && selectedVehicleId) {
+      onArmDisarmRequest('disarm', selectedVehicleId)
     }
   }
 
+  // Actualizar modos de vuelo disponibles cuando cambia el vehículo seleccionado
   useEffect(() => {
-    // Cargar telemetría del vehículo principal
-    const loadTelemetry = async () => {
-      try {
-        // Primero obtener lista de vehículos
-        const vehiclesResponse = await fetch('/api/mavlink/vehicles')
-        if (!vehiclesResponse.ok) {
-          setHasTelemetry(false)
-          setTelemetry({
-            signal: 'N/A',
-            battery: 'N/A',
-            gps: 'N/A',
-            armed: false
-          })
-          return
-        }
-        
-        const vehicles = await vehiclesResponse.json()
-        
-        // Si no hay vehículos, no hay telemetría
-        if (!vehicles || vehicles.length === 0) {
-          setHasTelemetry(false)
-          setTelemetry({
-            signal: 'N/A',
-            battery: 'N/A',
-            gps: 'N/A',
-            armed: false,
-            flightMode: 'N/A'
-          })
-          return
-        }
-        
-        // Tomar el primer vehículo disponible
-        const vehicle = vehicles[0]
-        
-        // Verificar si hay telemetría activa (datos recientes)
-        const isActive = vehicle.connected && vehicle.lastUpdate && 
-                        (Date.now() - vehicle.lastUpdate < 5000)
-        setHasTelemetry(isActive)
-        
-        if (!isActive) {
-          setTelemetry({
-            signal: 'N/A',
-            battery: 'N/A',
-            gps: 'N/A',
-            armed: false,
-            flightMode: 'N/A'
-          })
-          return
-        }
-        
-        // Calcular calidad de señal
-        let signalQuality = t('topbar.signalQuality.noSignal')
-        if (vehicle.signal_strength > 80) signalQuality = t('topbar.signalQuality.excellent')
-        else if (vehicle.signal_strength > 60) signalQuality = t('topbar.signalQuality.good')
-        else if (vehicle.signal_strength > 40) signalQuality = t('topbar.signalQuality.regular')
-        else if (vehicle.signal_strength > 0) signalQuality = t('topbar.signalQuality.weak')
-        
-        // Estado GPS
-        let gpsStatus = t('topbar.gpsStatus.noGps')
-        const fixType = vehicle.gps_fix_type ?? vehicle.fix_type ?? 0
-        const satellites = vehicle.gps_satellites ?? vehicle.satellites_visible ?? 0
-        
-        // MAVLink GPS fix types: 0=No GPS, 1=No Fix, 2=2D Fix, 3=3D Fix, 4=DGPS, 5=RTK Float, 6=RTK Fixed
-        if (fixType >= 3 && satellites >= 6) {
-          gpsStatus = `${t('topbar.gpsStatus.fix3d')} (${satellites})`
-        } else if (fixType === 2) {
-          gpsStatus = t('topbar.gpsStatus.fix2d')
-        } else if (fixType === 1) {
-          gpsStatus = t('topbar.gpsStatus.noFix')
-        }
-        
-        setTelemetry({
-          signal: signalQuality,
-          battery: `${vehicle.battery_remaining?.toFixed(0)}%`,
-          gps: gpsStatus,
-          armed: !!(vehicle.base_mode & 128), // MAV_MODE_FLAG_SAFETY_ARMED = 128
-          flightMode: vehicle.flightMode || 'Unknown',
-          systemId: vehicle.systemId,
-          custom_mode: vehicle.custom_mode || 0,
-          vehicleType: vehicle.type
-        })
-        
-        // Actualizar modos disponibles
-        setAvailableFlightModes(getFlightModesForVehicleType(vehicle.type))
-      } catch (error) {
-        // Si hay error de red o cualquier otro error, no hay telemetría
-        setHasTelemetry(false)
-        setTelemetry({
-          signal: 'N/A',
-          battery: 'N/A',
-          gps: 'N/A',
-          armed: false,
-          flightMode: 'N/A'
-        })
-      }
+    if (selectedVehicle) {
+      setAvailableFlightModes(getFlightModesForVehicleType(selectedVehicle.type))
     }
+  }, [selectedVehicle])
+
+  // Calcular valores derivados de telemetría desde el vehículo seleccionado
+  const getSignalQuality = () => {
+    if (!selectedVehicle) return t('topbar.signalQuality.noSignal')
+    const strength = selectedVehicle.signal_strength
+    if (strength > 80) return t('topbar.signalQuality.excellent')
+    if (strength > 60) return t('topbar.signalQuality.good')
+    if (strength > 40) return t('topbar.signalQuality.regular')
+    if (strength > 0) return t('topbar.signalQuality.weak')
+    return t('topbar.signalQuality.noSignal')
+  }
+
+  const getBatteryStatus = () => {
+    if (!isConnected || !selectedVehicle) return 'N/A'
+    const remaining = selectedVehicle.battery_remaining
+    return remaining != null ? `${remaining.toFixed(0)}%` : 'N/A'
+  }
+
+  const getGPSStatus = () => {
+    if (!isConnected || !selectedVehicle) return t('topbar.gpsStatus.noGps')
     
-    loadTelemetry()
-    const interval = setInterval(loadTelemetry, 1000)
+    const fixType = selectedVehicle.gps_fix_type ?? selectedVehicle.fix_type ?? 0
+    const satellites = selectedVehicle.gps_satellites ?? selectedVehicle.satellites_visible ?? 0
     
-    return () => clearInterval(interval)
-  }, [t])
+    if (fixType >= 3 && satellites >= 6) {
+      return `${t('topbar.gpsStatus.fix3d')} (${satellites})`
+    } else if (fixType === 2) {
+      return t('topbar.gpsStatus.fix2d')
+    } else if (fixType === 1) {
+      return t('topbar.gpsStatus.noFix')
+    }
+    return t('topbar.gpsStatus.noGps')
+  }
+
+  const isArmed = () => {
+    if (!isConnected || !selectedVehicle) return false
+    return !!(selectedVehicle.base_mode & 128) // MAV_MODE_FLAG_SAFETY_ARMED = 128
+  }
+
+  const getFlightMode = () => {
+    if (!isConnected || !selectedVehicle) return 'Unknown'
+    return selectedVehicle.flightMode || 'Unknown'
+  }
 
   // Función para auto-conectar con la primera conexión válida
   const handleAutoConnect = async () => {
@@ -259,8 +198,6 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
       // Probar cada conexión hasta encontrar una válida
       for (const connection of connections) {
-        console.log(`Probando conexión: ${connection.name}...`)
-        
         try {
           const response = await fetch('/api/mavlink/connect', {
             method: 'POST',
@@ -270,9 +207,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           const result = await response.json()
           
           if (result.success) {
-            console.log(`✓ Conectado con: ${connection.name}`)
             localStorage.setItem('mavlink_active_connection', JSON.stringify(connection.id))
-            setIsConnected(true)
             
             // Solicitar parámetros después de conectar
             // Verificar si es modo servidor TCP (no solicitar parámetros aún)
@@ -280,24 +215,29 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
             
             if (!isTcpServer) {
               // Para serial o TCP cliente, solicitar parámetros inmediatamente
-              try {
-                await fetch('/api/mavlink/parameters/request', { method: 'POST' })
-                console.log('Solicitud de parámetros enviada')
-              } catch (error) {
-                console.error('Error solicitando parámetros:', error)
-              }
+              // Pequeño delay para asegurar que la conexión está establecida
+              setTimeout(async () => {
+                try {
+                  const paramResponse = await fetch('/api/mavlink/parameters/request', { method: 'POST' })
+                  const paramResult = await paramResponse.json()
+                  
+                  if (paramResult.success) {
+                    setShowParamDownload(true)
+                  }
+                } catch (error) {
+                  console.error('Error solicitando parámetros:', error)
+                }
+              }, 500)
             }
             
             setConnecting(false)
             return // Salir al encontrar conexión exitosa
           }
         } catch (error) {
-          console.log(`✗ Falló: ${connection.name}`)
           continue // Probar siguiente conexión
         }
       }
       
-      console.log('No se pudo conectar con ninguna conexión')
       setConnecting(false)
     } catch (error) {
       console.error('Error en auto-connect:', error)
@@ -306,36 +246,37 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   }
 
   return (
-    <div className="top-bar">
-      <div className="top-bar-left">
-        {/* Vehículo seleccionado */}
-        <div className="indicator">
+    <>
+      <div className="top-bar">
+        <div className="top-bar-left">
+          {/* Vehículo seleccionado */}
+          <div className="indicator">
           <span className="indicator-icon">🚁</span>
           <span className="indicator-label">{t('topbar.vehicle')}</span>
-          <span className="indicator-value">{hasTelemetry ? '#1' : 'N/A'}</span>
+          <span className="indicator-value">{selectedVehicle ? `#${selectedVehicleId}` : 'N/A'}</span>
         </div>
         
         {/* Estado Armado/Desarmado */}
         {hasTelemetry && (
           <div style={{ position: 'relative' }}>
-            <div className={`indicator ${telemetry.armed ? 'armed' : 'disarmed'} clickable`}
+            <div className={`indicator ${isArmed() ? 'armed' : 'disarmed'} clickable`}
                  onClick={(e) => {
                    e.stopPropagation()
                    setShowArmDropdown(!showArmDropdown)
                    setShowFlightModeDropdown(false)
                  }}>
-              <span className="indicator-icon">{telemetry.armed ? '🔓' : '🔒'}</span>
+              <span className="indicator-icon">{isArmed() ? '🔓' : '🔒'}</span>
               <span className="indicator-label">{t('topbar.status')}</span>
-              <span className="indicator-value">{telemetry.armed ? t('topbar.armed') : t('topbar.disarmed')}</span>
+              <span className="indicator-value">{isArmed() ? t('topbar.armed') : t('topbar.disarmed')}</span>
             </div>
             
             {showArmDropdown && (
               <div className="arm-dropdown" ref={armDropdownRef}>
                 <div
-                  className={`arm-dropdown-option arm-option ${telemetry.armed ? 'disabled' : ''}`}
+                  className={`arm-dropdown-option arm-option ${isArmed() ? 'disabled' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (!telemetry.armed) {
+                    if (!isArmed()) {
                       handleArmClick()
                     }
                   }}
@@ -344,10 +285,10 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
                   <span>{t('sidebar.actions.arm')}</span>
                 </div>
                 <div
-                  className={`arm-dropdown-option disarm-option ${!telemetry.armed ? 'disabled' : ''}`}
+                  className={`arm-dropdown-option disarm-option ${!isArmed() ? 'disabled' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (telemetry.armed) {
+                    if (isArmed()) {
                       handleDisarmClick()
                     }
                   }}
@@ -371,7 +312,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
                  }}>
               <span className="indicator-icon">✈️</span>
               <span className="indicator-label">{t('topbar.flightMode')}</span>
-              <span className="indicator-value">{telemetry.flightMode}</span>
+              <span className="indicator-value">{getFlightMode()}</span>
             </div>
             
             {showFlightModeDropdown && (
@@ -379,7 +320,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
                 {Object.entries(availableFlightModes).map(([mode, name]) => (
                   <div
                     key={mode}
-                    className={`flight-mode-option ${parseInt(mode) === telemetry.custom_mode ? 'active' : ''}`}
+                    className={`flight-mode-option ${parseInt(mode) === selectedVehicle?.custom_mode ? 'active' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation()
                       handleFlightModeChange(mode)
@@ -397,21 +338,21 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         <div className="indicator">
           <span className="indicator-icon">📡</span>
           <span className="indicator-label">{t('topbar.signal')}</span>
-          <span className="indicator-value">{telemetry.signal}</span>
+          <span className="indicator-value">{getSignalQuality()}</span>
         </div>
         
         {/* Batería */}
         <div className="indicator">
           <span className="indicator-icon">🔋</span>
           <span className="indicator-label">{t('topbar.battery')}</span>
-          <span className="indicator-value">{telemetry.battery}</span>
+          <span className="indicator-value">{getBatteryStatus()}</span>
         </div>
         
         {/* GPS */}
         <div className="indicator">
           <span className="indicator-icon">📍</span>
           <span className="indicator-label">{t('topbar.gps')}</span>
-          <span className="indicator-value">{telemetry.gps}</span>
+          <span className="indicator-value">{getGPSStatus()}</span>
         </div>
         
         {/* Telemetría */}
@@ -443,6 +384,13 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         </button>
       </div>
     </div>
+
+    {/* Modal de descarga de parámetros */}
+    <ParameterDownloadModal
+      isOpen={showParamDownload}
+      onClose={() => setShowParamDownload(false)}
+    />
+    </>
   )
 }
 

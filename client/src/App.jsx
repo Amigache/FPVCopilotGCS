@@ -8,11 +8,13 @@ import UnifiedModal from './components/UnifiedModal'
 import ToastContainer from './components/ToastContainer'
 import { NotificationProvider, useNotification } from './contexts/NotificationContext'
 import { ParametersProvider } from './contexts/ParametersContext'
+import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
 import { useTranslation } from 'react-i18next'
 
 function AppContent() {
   const { t } = useTranslation()
   const notify = useNotification()
+  const { selectedVehicleId: wsSelectedVehicleId } = useWebSocketContext()
   const [currentView, setCurrentView] = useState('main') // 'main', 'settings', 'vehicleConfig'
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null, systemId: null })
@@ -76,9 +78,11 @@ function AppContent() {
   const renderView = () => {
     switch (currentView) {
       case 'settings':
-        return <Settings />
+        return <Settings onClose={() => setCurrentView('main')} />
       case 'vehicleConfig':
-        return <VehicleConfig systemId={selectedVehicleId} onClose={handleCloseVehicleConfig} />
+        // Usar wsSelectedVehicleId del contexto WebSocket como fallback
+        const vehicleIdToUse = selectedVehicleId || wsSelectedVehicleId
+        return <VehicleConfig systemId={vehicleIdToUse} onClose={handleCloseVehicleConfig} />
       case 'main':
       default:
         return <MainContent onVehicleConfigClick={handleVehicleConfigClick} onArmDisarmRequest={handleArmDisarmRequest} />
@@ -128,9 +132,11 @@ function AppContent() {
 function App() {
   return (
     <NotificationProvider>
-      <ParametersProvider>
-        <AppContent />
-      </ParametersProvider>
+      <WebSocketProvider>
+        <ParametersProvider>
+          <AppContent />
+        </ParametersProvider>
+      </WebSocketProvider>
     </NotificationProvider>
   )
 }

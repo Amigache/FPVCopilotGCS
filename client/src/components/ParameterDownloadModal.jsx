@@ -1,49 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useWebSocketContext } from '../contexts/WebSocketContext'
 import './ParameterDownloadModal.css'
 
 function ParameterDownloadModal({ isOpen, onClose }) {
   const { t } = useTranslation()
-  const [progress, setProgress] = useState({
-    total: 0,
-    received: 0,
-    complete: false
-  })
+  const { parametersProgress } = useWebSocketContext()
   const [isCancelling, setIsCancelling] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
 
-    const checkProgress = async () => {
-      try {
-        const response = await fetch('/api/mavlink/parameters/status')
-        const data = await response.json()
-        
-        setProgress({
-          total: data.total || 0,
-          received: data.received || 0,
-          complete: data.complete || false
-        })
-
-        // Cerrar automáticamente cuando se complete (solo si no fue cerrado manualmente)
-        if (data.complete && data.received > 0 && !isCancelling) {
-          setTimeout(() => {
-            onClose()
-          }, 1500) // Esperar 1.5s para que el usuario vea el 100%
-        }
-      } catch (error) {
-        console.error('Error obteniendo progreso de parámetros:', error)
-      }
+    // Cerrar automáticamente cuando se complete
+    if (parametersProgress.complete && parametersProgress.received > 0 && !isCancelling) {
+      setTimeout(() => {
+        onClose()
+      }, 1500) // Esperar 1.5s para que el usuario vea el 100%
     }
-
-    // Verificar inmediatamente
-    checkProgress()
-
-    // Polling cada 200ms
-    const interval = setInterval(checkProgress, 200)
-
-    return () => clearInterval(interval)
-  }, [isOpen, onClose, isCancelling])
+  }, [isOpen, parametersProgress.complete, parametersProgress.received, onClose, isCancelling])
 
   const handleCancel = async () => {
     setIsCancelling(true)
@@ -63,8 +37,8 @@ function ParameterDownloadModal({ isOpen, onClose }) {
 
   if (!isOpen) return null
 
-  const percentage = progress.total > 0 
-    ? Math.round((progress.received / progress.total) * 100) 
+  const percentage = parametersProgress.count > 0 
+    ? Math.round((parametersProgress.received / parametersProgress.count) * 100) 
     : 0
 
   return (
@@ -76,7 +50,7 @@ function ParameterDownloadModal({ isOpen, onClose }) {
         <div className="param-download-body">
           <div className="param-download-info">
             <span className="param-download-count">
-              {progress.received} / {progress.total} {t('parameterDownload.parameters')}
+              {parametersProgress.received} / {parametersProgress.count} {t('parameterDownload.parameters')}
             </span>
             <span className="param-download-percentage">
               {percentage}%
@@ -88,7 +62,7 @@ function ParameterDownloadModal({ isOpen, onClose }) {
               style={{ width: `${percentage}%` }}
             />
           </div>
-          {progress.complete ? (
+          {parametersProgress.complete ? (
             <div className="param-download-complete">
               {t('parameterDownload.complete')}
             </div>

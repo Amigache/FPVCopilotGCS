@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import './MainContent.css'
 import L from 'leaflet'
 import { useNotification } from '../contexts/NotificationContext'
+import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 // Fix para los iconos de Leaflet en React
 delete L.Icon.Default.prototype._getIconUrl
@@ -82,11 +83,19 @@ function MapController({ vehicles, followVehicle }) {
   
   useEffect(() => {
     if (vehicles.length > 0 && followVehicle) {
-      const bounds = vehicles.map(v => [v.lat, v.lon])
-      if (bounds.length === 1) {
-        map.setView(bounds[0], map.getZoom(), { animate: true })
-      } else {
-        map.fitBounds(bounds, { padding: [50, 50] })
+      // Filtrar vehículos con coordenadas válidas
+      const validVehicles = vehicles.filter(v => 
+        v.lat != null && v.lon != null && 
+        !isNaN(v.lat) && !isNaN(v.lon)
+      )
+      
+      if (validVehicles.length > 0) {
+        const bounds = validVehicles.map(v => [v.lat, v.lon])
+        if (bounds.length === 1) {
+          map.setView(bounds[0], map.getZoom(), { animate: true })
+        } else {
+          map.fitBounds(bounds, { padding: [50, 50] })
+        }
       }
     }
   }, [vehicles, followVehicle, map])
@@ -118,11 +127,21 @@ function MapEventHandler({ onContextMenu }) {
 function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const notify = useNotification()
-  const [vehicles, setVehicles] = useState([])
+  const { 
+    vehicles: wsVehicles, 
+    selectedVehicle: wsSelectedVehicle,
+    selectedVehicleId: wsSelectedVehicleId,
+    setSelectedVehicleId,
+    messages: wsMessages 
+  } = useWebSocketContext()
+  
+  // Usar vehículos y mensajes del WebSocket
+  const vehicles = wsVehicles.filter(v => v.connected)
+  const messages = wsMessages
+  const selectedVehicle = wsSelectedVehicleId
+  
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false)
-  const [messages, setMessages] = useState([])
-  const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [expandedCard, setExpandedCard] = useState('info') // 'info' o 'actions'
   const [actionLoading, setActionLoading] = useState(false)
   const [mapLayer, setMapLayer] = useState('street') // 'street' o 'satellite'
@@ -132,48 +151,15 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
   // SITL Ardupilot por defecto: Canberra, Australia
   const defaultPosition = [-35.363261, 149.165230]
 
+  // Actualizar modos de vuelo disponibles cuando cambia el vehículo seleccionado
   useEffect(() => {
-    // Cargar vehículos inicialmente
-    loadVehicles()
-    
-    // Actualizar cada segundo
-    const interval = setInterval(loadVehicles, 1000)
-    
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    // Cargar mensajes inicialmente
-    loadMessages()
-    
-    // Actualizar cada 2 segundos
-    const interval = setInterval(loadMessages, 2000)
-    
-    return () => clearInterval(interval)
-  }, [selectedVehicle])
-
-  // Auto-seleccionar vehículo cuando cambia la lista
-  useEffect(() => {
-    const connectedVehicles = vehicles.filter(v => v.connected)
-    
-    // Auto-seleccionar el primer vehículo si no hay ninguno seleccionado
-    if (connectedVehicles.length > 0 && !selectedVehicle) {
-      setSelectedVehicle(connectedVehicles[0].systemId)
-    }
-    
-    // Si el vehículo seleccionado ya no existe, seleccionar el primero disponible
-    if (selectedVehicle && !connectedVehicles.find(v => v.systemId === selectedVehicle)) {
-      setSelectedVehicle(connectedVehicles.length > 0 ? connectedVehicles[0].systemId : null)
-    }
-    
-    // Actualizar modos de vuelo disponibles según el tipo de vehículo
-    if (selectedVehicle && connectedVehicles.length > 0) {
-      const vehicle = connectedVehicles.find(v => v.systemId === selectedVehicle)
+    if (selectedVehicle && vehicles.length > 0) {
+      const vehicle = vehicles.find(v => v.systemId === selectedVehicle)
       if (vehicle) {
         setAvailableFlightModes(getFlightModesForVehicleType(vehicle.type))
       }
     }
-  }, [vehicles, selectedVehicle])
+  }, [selectedVehicle, vehicles.length])
 
   const getFlightModesForVehicleType = (vehicleType) => {
     // Plane modes
@@ -209,38 +195,13 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
     return {}
   }
 
-  const loadVehicles = async () => {
-    try {
-      const response = await fetch('/api/mavlink/vehicles')
-      const data = await response.json()
-      // Filtrar solo vehículos conectados
-      const connectedVehicles = data.filter(v => v.connected)
-      setVehicles(connectedVehicles)
-    } catch (error) {
-      console.error('Error cargando vehículos:', error)
-    }
-  }
-
-  const loadMessages = async () => {
-    try {
-      const url = selectedVehicle 
-        ? `/api/mavlink/messages?systemId=${selectedVehicle}&limit=100`
-        : '/api/mavlink/messages?limit=100'
-      const response = await fetch(url)
-      const data = await response.json()
-      setMessages(data)
-    } catch (error) {
-      console.error('Error cargando mensajes:', error)
-    }
-  }
-
   const clearMessages = async () => {
     try {
       const url = selectedVehicle 
         ? `/api/mavlink/messages?systemId=${selectedVehicle}`
         : '/api/mavlink/messages'
       await fetch(url, { method: 'DELETE' })
-      setMessages([])
+      // Los mensajes se actualizarán automáticamente vía WebSocket
     } catch (error) {
       console.error('Error limpiando mensajes:', error)
     }
@@ -664,7 +625,7 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
         {vehicles.length > 0 && <MapController vehicles={vehicles} followVehicle={followVehicle} />}
         <MapEventHandler onContextMenu={handleMapContextMenu} />
         
-        {vehicles.map((vehicle) => (
+        {vehicles.filter(v => v.lat != null && v.lon != null).map((vehicle) => (
           <Marker 
             key={vehicle.systemId}
             position={[vehicle.lat, vehicle.lon]}
@@ -675,13 +636,13 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
                 <h3 style={{ margin: '0 0 10px 0' }}>{t('map.vehicle')} #{vehicle.systemId}</h3>
                 <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
                   <div><strong>{t('map.status')}:</strong> {vehicle.connected ? t('map.connected') : t('map.disconnected')}</div>
-                  <div><strong>{t('map.position')}:</strong> {vehicle.lat.toFixed(6)}, {vehicle.lon.toFixed(6)}</div>
-                  <div><strong>{t('map.altitude')}:</strong> {vehicle.alt?.toFixed(1)} m</div>
-                  <div><strong>{t('map.battery')}:</strong> {vehicle.battery_remaining?.toFixed(0)}% ({vehicle.battery_voltage?.toFixed(1)}V)</div>
-                  <div><strong>{t('map.gps')}:</strong> {vehicle.gps_satellites} sats (Fix: {vehicle.gps_fix_type})</div>
-                  <div><strong>{t('map.signal')}:</strong> {vehicle.signal_strength?.toFixed(0)}%</div>
-                  <div><strong>{t('map.speed')}:</strong> {vehicle.groundspeed?.toFixed(1)} m/s</div>
-                  <div><strong>{t('map.heading')}:</strong> {vehicle.heading?.toFixed(0)}°</div>
+                  <div><strong>{t('map.position')}:</strong> {vehicle.lat?.toFixed(6)}, {vehicle.lon?.toFixed(6)}</div>
+                  <div><strong>{t('map.altitude')}:</strong> {vehicle.alt?.toFixed(1) || 'N/A'} m</div>
+                  <div><strong>{t('map.battery')}:</strong> {vehicle.battery_remaining?.toFixed(0) || 'N/A'}% ({vehicle.battery_voltage?.toFixed(1) || 'N/A'}V)</div>
+                  <div><strong>{t('map.gps')}:</strong> {vehicle.gps_satellites || 0} sats (Fix: {vehicle.gps_fix_type || 0})</div>
+                  <div><strong>{t('map.signal')}:</strong> {vehicle.signal_strength?.toFixed(0) || 'N/A'}%</div>
+                  <div><strong>{t('map.speed')}:</strong> {vehicle.groundspeed?.toFixed(1) || 'N/A'} m/s</div>
+                  <div><strong>{t('map.heading')}:</strong> {vehicle.heading?.toFixed(0) || 'N/A'}°</div>
                 </div>
               </div>
             </Popup>

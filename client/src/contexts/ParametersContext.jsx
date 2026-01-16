@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { useNotification } from './NotificationContext'
+import { useWebSocketContext } from './WebSocketContext'
 
 const ParametersContext = createContext(null)
 
@@ -31,6 +32,7 @@ export const useParameters = () => {
 
 export const ParametersProvider = ({ children }) => {
   const notify = useNotification()
+  const websocket = useWebSocketContext()
   
   // Estado de parámetros
   const [parameters, setParameters] = useState(new Map())
@@ -44,13 +46,25 @@ export const ParametersProvider = ({ children }) => {
   const CACHE_DURATION = 30000 // 30 segundos
 
   /**
+   * Escuchar actualizaciones de progreso de descarga desde WebSocket
+   */
+  useEffect(() => {
+    if (websocket.parametersProgress) {
+      setStats({
+        total: websocket.parametersProgress.count || 0,
+        received: websocket.parametersProgress.received || 0,
+        complete: websocket.parametersProgress.complete || false
+      })
+    }
+  }, [websocket.parametersProgress])
+
+  /**
    * Cargar parámetros desde el servidor
    * @param {boolean} force - Forzar recarga ignorando caché
    */
   const loadParameters = useCallback(async (force = false) => {
     // Evitar llamadas simultáneas
     if (loadingRef.current && !force) {
-      console.log('⏸️  [ParametersContext] Carga ya en progreso, saltando...')
       return parameters
     }
 
@@ -58,7 +72,6 @@ export const ParametersProvider = ({ children }) => {
     if (!force && lastLoadTime.current) {
       const timeSinceLastLoad = Date.now() - lastLoadTime.current
       if (timeSinceLastLoad < CACHE_DURATION) {
-        console.log(`✅ [ParametersContext] Usando caché (${Math.round(timeSinceLastLoad / 1000)}s desde última carga)`)
         return parameters
       }
     }
@@ -70,10 +83,12 @@ export const ParametersProvider = ({ children }) => {
       // Verificar conexión
       const statusResponse = await fetch('/api/mavlink/parameters/status')
       const statusData = await statusResponse.json()
-      setIsConnected(statusData.connected || false)
+      
+      // Considerar como conectado si hay total de parámetros (indicador de que hubo comunicación)
+      const isReallyConnected = statusData.connected || statusData.total > 0
+      setIsConnected(isReallyConnected)
 
-      if (!statusData.connected) {
-        console.log('⚠️  [ParametersContext] No hay conexión activa')
+      if (!isReallyConnected && statusData.total === 0) {
         setParameters(new Map())
         setStats({ total: 0, received: 0, complete: false })
         setLoading(false)
@@ -104,12 +119,11 @@ export const ParametersProvider = ({ children }) => {
       })
 
       lastLoadTime.current = Date.now()
-      console.log(`✅ [ParametersContext] ${paramsMap.size} parámetros cargados`)
 
       return paramsMap
     } catch (error) {
-      console.error('❌ [ParametersContext] Error cargando parámetros:', error)
-      notify.error('Error al cargar parámetros del vehículo')
+      console.error('Error cargando parámetros:', error)
+      notify.error(t('parameters.modals.loadError'))
       return new Map()
     } finally {
       setLoading(false)
@@ -242,7 +256,7 @@ export const ParametersProvider = ({ children }) => {
 
   /**
    * Solicitar descarga de parámetros del vehículo
-   * @returns {Promise<boolean>} true si se inició la solicitud correctamente
+   * @returns {Promise<{success: boolean, message: string}>} Resultado de la solicitud
    */
   const requestParameters = useCallback(async () => {
     try {
@@ -255,18 +269,17 @@ export const ParametersProvider = ({ children }) => {
         console.log('✅ [ParametersContext] Solicitud de parámetros enviada')
         // Forzar recarga después de un breve delay
         setTimeout(() => loadParameters(true), 1000)
-        return true
+        return { success: true, message: result.message }
       } else {
         console.error('❌ [ParametersContext] Error en solicitud:', result.message)
-        notify.warning('No se pudieron solicitar los parámetros')
-        return false
+        // Devolver resultado del servidor tal como es
+        return { success: false, message: result.message }
       }
     } catch (error) {
       console.error('❌ [ParametersContext] Error solicitando parámetros:', error)
-      notify.error('Error al solicitar parámetros')
-      return false
+      return { success: false, message: error.message }
     }
-  }, [loadParameters, notify])
+  }, [loadParameters])
 
   /**
    * Limpiar caché y forzar recarga

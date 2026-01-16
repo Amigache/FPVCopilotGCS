@@ -9,6 +9,12 @@
     "errorLoading": "Error al cargar la configuración",
     "parametersRejected": "{{count}} parámetro(s) rechazado(s) por el vehículo"
   },
+  "reconnect": {
+    "noSavedConnections": "No hay conexiones guardadas. Conecta manualmente desde Conexiones.",
+    "reconnectedWith": "Reconectado con {{name}}",
+    "noConnection": "Sin conexión. Abre la sección Conexiones para reconectar manualmente.",
+    "connectionLost": "Conexión con el vehículo perdida. Volviendo a la vista principal."
+  },
   "topbar": {
     "vehicle": "Vehículo",
     "status": "Estado",
@@ -165,8 +171,7 @@
       "noConnection": "Sin Conexión",
       "noConnectionMessage": "No hay conexión activa con el vehículo. Por favor, establece una conexión desde la sección de Conexiones antes de descargar los parámetros.",
       "connectionError": "Error de Conexión",
-      "serverConnectionError": "No se pudo conectar con el servidor. Verifica que el servidor esté funcionando.",
-      "parameterUpdated": "Parámetro Actualizado",
+      "serverConnectionError": "No se pudo conectar con el servidor. Verifica que el servidor esté funcionando.",      "loadError": "Error al cargar parámetros del vehículo",      "parameterUpdated": "Parámetro Actualizado",
       "parameterUpdateSuccess": "El parámetro {{name}} se ha actualizado correctamente.",
       "saveError": "Error al Guardar",
       "parameterUpdateError": "No se pudo actualizar el parámetro.",

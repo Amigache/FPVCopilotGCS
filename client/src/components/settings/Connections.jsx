@@ -4,10 +4,12 @@ import './Connections.css'
 import ParameterDownloadModal from '../ParameterDownloadModal'
 import OnScreenKeyboard from '../OnScreenKeyboard'
 import { useNotification } from '../../contexts/NotificationContext'
+import { useWebSocketContext } from '../../contexts/WebSocketContext'
 
 function Connections() {
   const { t } = useTranslation()
   const notify = useNotification()
+  const { connectionStatus, markManualDisconnect, enableAutoReconnect } = useWebSocketContext()
   const [connecting, setConnecting] = useState(false)
   const [showParamDownload, setShowParamDownload] = useState(false)
   const [connections, setConnections] = useState([])
@@ -39,47 +41,29 @@ function Connections() {
     }
   }, [])
   
-  // Polling separado para verificar estado de conexión
+  // Sincronizar activeConnection con el estado real de conexión desde WebSocket
   useEffect(() => {
-    const interval = setInterval(() => {
-      checkServerConnection()
-    }, 2000)
+    const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
     
-    return () => clearInterval(interval)
-  }, [activeConnection]) // Dependencia de activeConnection para capturar valor actual
-  
-  // Verificar estado de conexión con el servidor
-  const checkServerConnection = async () => {
-    try {
-      const response = await fetch('/api/mavlink/status')
-      if (response.ok) {
-        const data = await response.json()
-        
-        // Si el servidor NO está conectado pero tenemos activeConnection, limpiar
-        if (!data.connected && activeConnection !== null) {
-          console.log('Servidor desconectado, limpiando estado local')
+    // Si hay conexión activa en el servidor, restaurar desde localStorage
+    if (connectionStatus?.connected && savedActiveConnection && !activeConnection) {
+      setActiveConnection(JSON.parse(savedActiveConnection))
+    }
+    
+    // Si el servidor NO está conectado y tenemos activeConnection, solo limpiar después de un delay
+    // para evitar limpiar durante reconexiones temporales
+    if (!connectionStatus?.connected && activeConnection !== null) {
+      const timer = setTimeout(() => {
+        // Verificar nuevamente después del delay
+        if (!connectionStatus?.connected) {
           setActiveConnection(null)
           localStorage.removeItem('mavlink_active_connection')
         }
-        
-        // Si el servidor está conectado pero no tenemos activeConnection, intentar recuperar
-        if (data.connected && activeConnection === null) {
-          const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
-          if (savedActiveConnection) {
-            console.log('Reconectando estado local con servidor')
-            setActiveConnection(JSON.parse(savedActiveConnection))
-          }
-        }
-      }
-    } catch (error) {
-      // Si hay error de red, limpiar activeConnection
-      if (activeConnection !== null) {
-        console.log('Error de conexión con servidor, limpiando estado')
-        setActiveConnection(null)
-        localStorage.removeItem('mavlink_active_connection')
-      }
+      }, 5000) // Dar 5 segundos para reconectar antes de limpiar
+      
+      return () => clearTimeout(timer)
     }
-  }
+  }, [connectionStatus?.connected, activeConnection])
 
   // Guardar conexiones cuando cambien
   useEffect(() => {
@@ -99,6 +83,9 @@ function Connections() {
 
   const handleDisconnect = async () => {
     try {
+      // Marcar como desconexión manual para detener auto-reconnect
+      markManualDisconnect()
+      
       const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
       const result = await response.json()
       
@@ -118,6 +105,12 @@ function Connections() {
 
   const handleConnect = async (connection, isAutoConnect = false) => {
     setConnecting(true)
+    
+    // Reactivar auto-reconnect al conectar manualmente
+    if (!isAutoConnect) {
+      enableAutoReconnect()
+    }
+    
     try {
       // Primero conectar
       const response = await fetch('/api/mavlink/connect', {

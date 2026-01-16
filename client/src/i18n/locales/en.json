@@ -9,6 +9,12 @@
     "errorLoading": "Error loading configuration",
     "parametersRejected": "{{count}} parameter(s) rejected by vehicle"
   },
+  "reconnect": {
+    "noSavedConnections": "No saved connections. Connect manually from Connections.",
+    "reconnectedWith": "Reconnected with {{name}}",
+    "noConnection": "No connection. Open the Connections section to reconnect manually.",
+    "connectionLost": "Connection to vehicle lost. Returning to main view."
+  },
   "topbar": {
     "vehicle": "Vehicle",
     "status": "Status",
@@ -166,6 +172,7 @@
       "noConnectionMessage": "There is no active connection to the vehicle. Please establish a connection from the Connections section before downloading parameters.",
       "connectionError": "Connection Error",
       "serverConnectionError": "Could not connect to the server. Verify that the server is running.",
+      "loadError": "Error loading vehicle parameters",
       "parameterUpdated": "Parameter Updated",
       "parameterUpdateSuccess": "Parameter {{name}} has been updated successfully.",
       "saveError": "Save Error",

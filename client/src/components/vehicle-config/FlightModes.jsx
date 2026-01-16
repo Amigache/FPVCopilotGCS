@@ -79,7 +79,7 @@ const ROVER_MODES = {
   15: 'Guided'
 }
 
-const FlightModes = forwardRef(({ systemId }, ref) => {
+const FlightModes = forwardRef(({ systemId, vehicle }, ref) => {
   const { t } = useTranslation()
   const notify = useNotification()
   const [flightModes, setFlightModes] = useState(null)
@@ -165,10 +165,26 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
   }))
 
   useEffect(() => {
-    loadVehicleType()
-  }, [systemId])
+    // Si tenemos el objeto vehículo, usarlo directamente
+    if (vehicle) {
+      setVehicleType(vehicle.type)
+      if (vehicle.type === 1) {
+        setAvailableModes(PLANE_MODES)
+      } else if ([2, 3, 4, 13, 14, 15].includes(vehicle.type)) {
+        setAvailableModes(COPTER_MODES)
+      } else if (vehicle.type === 10) {
+        setAvailableModes(ROVER_MODES)
+      } else {
+        setAvailableModes(COPTER_MODES)
+      }
+    } else {
+      // Fallback: obtener del API
+      loadVehicleType()
+    }
+  }, [systemId, vehicle])
 
   useEffect(() => {
+    // Cargar datos cuando se determina el tipo de vehículo
     if (vehicleType !== null) {
       configSection.loadData()
     }
@@ -178,19 +194,18 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
     try {
       const response = await fetch('/api/mavlink/vehicles')
       const vehicles = await response.json()
-      const vehicle = vehicles.find(v => v.systemId === systemId) || vehicles[0]
+      const vehicleData = vehicles.find(v => v.systemId === systemId) || vehicles[0]
       
-      if (vehicle) {
-        setVehicleType(vehicle.type)
-        // Seleccionar los modos disponibles según el tipo de vehículo
-        if (vehicle.type === 1) {
+      if (vehicleData) {
+        setVehicleType(vehicleData.type)
+        if (vehicleData.type === 1) {
           setAvailableModes(PLANE_MODES)
-        } else if ([2, 3, 4, 13, 14, 15].includes(vehicle.type)) {
+        } else if ([2, 3, 4, 13, 14, 15].includes(vehicleData.type)) {
           setAvailableModes(COPTER_MODES)
-        } else if (vehicle.type === 10) {
+        } else if (vehicleData.type === 10) {
           setAvailableModes(ROVER_MODES)
         } else {
-          setAvailableModes(COPTER_MODES) // default
+          setAvailableModes(COPTER_MODES)
         }
       }
     } catch (error) {
