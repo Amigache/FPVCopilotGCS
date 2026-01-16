@@ -2,6 +2,13 @@
   "app": {
     "title": "FPV Copilot GCS"
   },
+  "common": {
+    "noChanges": "No hay cambios para guardar",
+    "savedSuccessfully": "Guardado exitosamente",
+    "errorSaving": "Error al guardar",
+    "errorLoading": "Error al cargar la configuración",
+    "parametersRejected": "{{count}} parámetro(s) rechazado(s) por el vehículo"
+  },
   "topbar": {
     "vehicle": "Vehículo",
     "status": "Estado",

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import 'leaflet/dist/leaflet.css'
 import './MainContent.css'
 import L from 'leaflet'
-import Modal from './Modal'
+import { useNotification } from '../contexts/NotificationContext'
 
 // Fix para los iconos de Leaflet en React
 delete L.Icon.Default.prototype._getIconUrl
@@ -117,13 +117,13 @@ function MapEventHandler({ onContextMenu }) {
 
 function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [vehicles, setVehicles] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [expandedCard, setExpandedCard] = useState('info') // 'info' o 'actions'
-  const [resultModal, setResultModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [actionLoading, setActionLoading] = useState(false)
   const [mapLayer, setMapLayer] = useState('street') // 'street' o 'satellite'
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, coords: null })
@@ -327,28 +327,13 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
       setActionLoading(false)
       
       if (result.success) {
-        setResultModal({
-          isOpen: true,
-          title: t('sidebar.actions.flightModeSuccess'),
-          message: result.message || t('sidebar.actions.flightModeSuccessMessage'),
-          type: 'success'
-        })
+        notify.success(result.message || t('sidebar.actions.flightModeSuccessMessage'))
       } else {
-        setResultModal({
-          isOpen: true,
-          title: t('sidebar.actions.flightModeError'),
-          message: result.message || t('sidebar.actions.flightModeErrorMessage'),
-          type: 'error'
-        })
+        notify.error(result.message || t('sidebar.actions.flightModeErrorMessage'))
       }
     } catch (error) {
       setActionLoading(false)
-      setResultModal({
-        isOpen: true,
-        title: t('sidebar.actions.connectionError'),
-        message: t('sidebar.actions.connectionErrorMessage'),
-        type: 'error'
-      })
+      notify.error(t('sidebar.actions.connectionErrorMessage'))
     }
   }
 
@@ -752,14 +737,6 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
         </>
       )}
 
-      {/* Modal de resultado */}
-      <Modal
-        isOpen={resultModal.isOpen}
-        onClose={() => setResultModal({ isOpen: false, title: '', message: '', type: 'info' })}
-        title={resultModal.title}
-        message={resultModal.message}
-        type={resultModal.type}
-      />
     </div>
   )
 }

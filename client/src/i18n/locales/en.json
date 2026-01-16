@@ -2,6 +2,13 @@
   "app": {
     "title": "FPV Copilot GCS"
   },
+  "common": {
+    "noChanges": "No changes to save",
+    "savedSuccessfully": "Saved successfully",
+    "errorSaving": "Error saving",
+    "errorLoading": "Error loading configuration",
+    "parametersRejected": "{{count}} parameter(s) rejected by vehicle"
+  },
   "topbar": {
     "vehicle": "Vehicle",
     "status": "Status",

@@ -1,19 +1,15 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNotification } from '../../contexts/NotificationContext'
+import useVehicleConfigSection from '../../hooks/useVehicleConfigSection'
 import './common.css'
 import './SerialPorts.css'
-import Modal from '../Modal'
 
 const SerialPorts = forwardRef(({ systemId }, ref) => {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [serialPorts, setSerialPorts] = useState([])
-  const [originalValues, setOriginalValues] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [modified, setModified] = useState(false)
   const [error, setError] = useState(null)
-  const [message, setMessage] = useState({ text: '', type: '' })
-  const [isLoadingRef, setIsLoadingRef] = useState(false)
 
   // Protocolos comunes de ArduPilot
   const protocols = {
@@ -105,120 +101,112 @@ const SerialPorts = forwardRef(({ systemId }, ref) => {
     { code: '2000', rate: '2000000' }
   ]
 
+  // Función para cargar datos desde el Map de parámetros
+  const loadDataFn = useCallback(async (paramsMap) => {
+    const ports = []
+    for (let i = 0; i < 8; i++) {
+      const protocolParam = paramsMap.get(`SERIAL${i}_PROTOCOL`)
+      const baudParam = paramsMap.get(`SERIAL${i}_BAUD`)
+      
+      const protocolValue = protocolParam ? protocolParam.value : null
+      const baudValue = baudParam ? baudParam.value : null
+
+      let baudCode = '57'
+      if (baudValue !== null) {
+        const baudValueInt = Math.round(baudValue)
+        baudCode = baudValueInt.toString()
+        
+        const validCode = baudRates.find(b => b.code === baudCode)
+        if (!validCode && baudValueInt !== 0) {
+          baudCode = '57'
+        }
+      }
+
+      ports.push({
+        index: i,
+        name: `SERIAL${i}`,
+        protocol: protocolValue !== null ? protocolValue.toString() : '-1',
+        baud: baudCode
+      })
+    }
+    
+    setSerialPorts(ports)
+    
+    const original = {}
+    ports.forEach(port => {
+      original[`SERIAL${port.index}_PROTOCOL`] = port.protocol
+      original[`SERIAL${port.index}_BAUD`] = port.baud
+    })
+    
+    if (ports.every(p => p.protocol === '-1')) {
+      setError(t('serialPorts.noParameters'))
+    } else {
+      setError(null)
+    }
+    
+    return { originalValues: original }
+  }, [t])
+
+  // Función para obtener parámetros modificados
+  const getChangedParams = useCallback(() => {
+    const paramsToUpdate = []
+    
+    for (const port of serialPorts) {
+      if (port.protocol !== configSection.originalValues[`SERIAL${port.index}_PROTOCOL`]) {
+        paramsToUpdate.push({
+          name: `SERIAL${port.index}_PROTOCOL`,
+          value: parseFloat(port.protocol)
+        })
+      }
+      
+      if (port.baud !== configSection.originalValues[`SERIAL${port.index}_BAUD`]) {
+        paramsToUpdate.push({
+          name: `SERIAL${port.index}_BAUD`,
+          value: parseFloat(port.baud)
+        })
+      }
+    }
+    
+    return paramsToUpdate
+  }, [serialPorts])
+
+  // Callback después de guardar
+  const onSaveSuccess = useCallback(() => {
+    const newOriginal = {}
+    serialPorts.forEach(port => {
+      newOriginal[`SERIAL${port.index}_PROTOCOL`] = port.protocol
+      newOriginal[`SERIAL${port.index}_BAUD`] = port.baud
+    })
+    configSection.updateOriginalValues(newOriginal)
+  }, [serialPorts])
+
+  // Hook de configuración
+  const configSection = useVehicleConfigSection({
+    loadDataFn,
+    getChangedParams,
+    onSaveSuccess,
+    t
+  })
+
   // Exponer métodos al componente padre
   useImperativeHandle(ref, () => ({
-    hasUnsavedChanges: () => modified,
-    saveChanges: handleSave,
+    hasUnsavedChanges: configSection.hasUnsavedChanges,
+    saveChanges: () => configSection.saveChanges(),
     resetChanges: () => {
-      // Restaurar valores originales
       const restoredPorts = serialPorts.map(port => ({
         ...port,
-        protocol: originalValues[`SERIAL${port.index}_PROTOCOL`] || '-1',
-        baud: originalValues[`SERIAL${port.index}_BAUD`] || '57'
+        protocol: configSection.originalValues[`SERIAL${port.index}_PROTOCOL`] || '-1',
+        baud: configSection.originalValues[`SERIAL${port.index}_BAUD`] || '57'
       }))
       setSerialPorts(restoredPorts)
-      setModified(false)
-      setMessage({ text: '', type: '' })
+      configSection.resetChanges()
       setError(null)
     }
   }))
 
   useEffect(() => {
-    loadSerialPorts()
+    configSection.loadData()
   }, [systemId])
-
-  const showMessage = (text, type) => {
-    setMessage({ text, type })
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000)
-  }
-
-  const loadSerialPorts = async () => {
-    // Evitar llamadas múltiples simultáneas
-    if (isLoadingRef) {
-      console.log('loadSerialPorts: Ya hay una carga en progreso, saltando...')
-      return
-    }
-    
-    setIsLoadingRef(true)
-    setLoading(true)
-    setError(null)
-    setMessage({ text: '', type: '' }) // Limpiar mensajes anteriores
-
-    try {
-      // Obtener todos los parámetros
-      const response = await fetch('/api/mavlink/parameters')
-      const data = await response.json()
-
-      if (data.parameters) {
-        const ports = []
-        for (let i = 0; i < 8; i++) {
-          const protocolParam = data.parameters.find(p => 
-            p.name === `SERIAL${i}_PROTOCOL`
-          )
-          const baudParam = data.parameters.find(p => 
-            p.name === `SERIAL${i}_BAUD`
-          )
-
-          // Para BAUD, necesitamos convertir el valor a string y buscarlo en nuestro mapa
-          // El backend puede enviar valores como 115.0 o 115, necesitamos normalizar
-          let baudCode = '57' // default
-          if (baudParam) {
-            const baudValue = Math.round(baudParam.value)
-            baudCode = baudValue.toString()
-            
-            // Verificar que el código existe en nuestro mapa
-            const validCode = baudRates.find(b => b.code === baudCode)
-            if (!validCode && baudValue !== 0) {
-              console.warn(`SERIAL${i}_BAUD: Código ${baudCode} no encontrado en baudRates, usando default 57`)
-              baudCode = '57'
-            }
-          }
-
-          ports.push({
-            index: i,
-            name: `SERIAL${i}`,
-            protocol: protocolParam ? protocolParam.value.toString() : '-1',
-            baud: baudCode
-          })
-        }
-        
-        setSerialPorts(ports)
-        
-        // Guardar valores originales usando los valores exactos de los puertos cargados
-        const original = {}
-        ports.forEach(port => {
-          original[`SERIAL${port.index}_PROTOCOL`] = port.protocol
-          original[`SERIAL${port.index}_BAUD`] = port.baud
-        })
-        setOriginalValues(original)
-
-        // Si no hay parámetros, mostrar mensaje
-        if (ports.every(p => p.protocol === '-1')) {
-          setError(t('serialPorts.noParameters'))
-        }
-      } else {
-        throw new Error('No parameters available')
-      }
-    } catch (err) {
-      console.error('Error loading serial ports:', err)
-      setError(t('serialPorts.errorLoading'))
-      
-      // Mostrar puertos con valores por defecto
-      const defaultPorts = []
-      for (let i = 0; i < 8; i++) {
-        defaultPorts.push({
-          index: i,
-          name: `SERIAL${i}`,
-          protocol: '-1',
-          baud: '57'  // Código por defecto para 57600
-        })
-      }
-      setSerialPorts(defaultPorts)
-    } finally {
-      setLoading(false)
-      setIsLoadingRef(false)
-    }
-  }
 
   const handleProtocolChange = (index, value) => {
     const updatedPorts = serialPorts.map(port => 
@@ -240,103 +228,19 @@ const SerialPorts = forwardRef(({ systemId }, ref) => {
     let isModified = false
     
     for (const port of ports) {
-      if (port.protocol !== originalValues[`SERIAL${port.index}_PROTOCOL`] ||
-          port.baud !== originalValues[`SERIAL${port.index}_BAUD`]) {
+      if (port.protocol !== configSection.originalValues[`SERIAL${port.index}_PROTOCOL`] ||
+          port.baud !== configSection.originalValues[`SERIAL${port.index}_BAUD`]) {
         isModified = true
         break
       }
     }
     
-    setModified(isModified)
-  }
-
-  const handleSave = async () => {
-    if (!modified) {
-      showMessage(t('serialPorts.noChanges'), 'info')
-      return
-    }
-
-    setSaving(true)
-    setError(null)
-
-    try {
-      const promises = []
-      
-      // Solo enviar parámetros que han cambiado
-      for (const port of serialPorts) {
-        // Verificar si el protocolo cambió
-        if (port.protocol !== originalValues[`SERIAL${port.index}_PROTOCOL`]) {
-          promises.push(
-            fetch('/api/mavlink/parameters/set', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: `SERIAL${port.index}_PROTOCOL`,
-                value: parseFloat(port.protocol)
-              })
-            })
-          )
-        }
-        
-        // Verificar si el baud rate cambió
-        if (port.baud !== originalValues[`SERIAL${port.index}_BAUD`]) {
-          promises.push(
-            fetch('/api/mavlink/parameters/set', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: `SERIAL${port.index}_BAUD`,
-                value: parseFloat(port.baud)
-              })
-            })
-          )
-        }
-      }
-
-      if (promises.length === 0) {
-        showMessage(t('serialPorts.noChanges'), 'info')
-        return
-      }
-
-      const results = await Promise.all(promises)
-      
-      // Verificar respuestas
-      const responses = await Promise.all(results.map(r => r.json()))
-      const rejectedParams = responses.filter(r => !r.success)
-      const successParams = responses.filter(r => r.success)
-      
-      if (rejectedParams.length > 0) {
-        // Algunos parámetros fueron rechazados por el vehículo
-        const rejectedNames = rejectedParams.map(r => r.message || 'Unknown').join(', ')
-        showMessage(
-          `${t('serialPorts.partialError')}: ${rejectedParams.length} ${t('serialPorts.rejected')}`,
-          'warning'
-        )
-        // Recargar para obtener los valores reales del vehículo
-        setTimeout(() => loadSerialPorts(), 1000)
-      } else if (successParams.length > 0) {
-        // Todos los parámetros fueron aceptados
-        // Actualizar valores originales para que coincidan con los nuevos valores guardados
-        const newOriginalValues = {}
-        serialPorts.forEach(port => {
-          newOriginalValues[`SERIAL${port.index}_PROTOCOL`] = port.protocol
-          newOriginalValues[`SERIAL${port.index}_BAUD`] = port.baud
-        })
-        setOriginalValues(newOriginalValues)
-        setModified(false)
-        showMessage(t('serialPorts.successSave'), 'success')
-      } else {
-        showMessage(t('serialPorts.errorSave'), 'error')
-      }
-    } catch (err) {
-      console.error('Error saving serial ports:', err)
-      showMessage(t('serialPorts.errorSave'), 'error')
-    } finally {
-      setSaving(false)
+    if (isModified) {
+      configSection.markAsModified()
     }
   }
 
-  if (loading) {
+  if (configSection.loading) {
     return (
       <div className="config-section">
         <div className="loading-container">
@@ -356,12 +260,12 @@ const SerialPorts = forwardRef(({ systemId }, ref) => {
         </div>
         <div className="header-right">
           <button
-            onClick={handleSave}
-            disabled={!modified || saving}
-            className={`save-button ${modified ? 'modified' : ''}`}
+            onClick={() => configSection.saveChanges()}
+            disabled={!configSection.modified || configSection.saving}
+            className={`save-button ${configSection.modified ? 'modified' : ''}`}
           >
-            {saving ? t('serialPorts.saving') : 
-             modified ? t('serialPorts.saveChanges') : 
+            {configSection.saving ? t('serialPorts.saving') : 
+             configSection.modified ? t('serialPorts.saveChanges') : 
              t('serialPorts.noChanges')}
           </button>
         </div>
@@ -376,8 +280,8 @@ const SerialPorts = forwardRef(({ systemId }, ref) => {
 
       <div className="serial-ports-grid">
         {serialPorts.map(port => {
-          const isModified = port.protocol !== originalValues[`SERIAL${port.index}_PROTOCOL`] ||
-                            port.baud !== originalValues[`SERIAL${port.index}_BAUD`]
+          const isModified = port.protocol !== configSection.originalValues[`SERIAL${port.index}_PROTOCOL`] ||
+                            port.baud !== configSection.originalValues[`SERIAL${port.index}_BAUD`]
           return (
           <div key={port.index} className="serial-port-card">
             <div className="serial-port-header">
@@ -439,15 +343,6 @@ const SerialPorts = forwardRef(({ systemId }, ref) => {
         </ul>
       </div>
 
-      <Modal
-        isOpen={message.text !== ''}
-        onClose={() => setMessage({ text: '', type: '' })}
-        title={message.type === 'success' ? t('serialPorts.success') : 
-               message.type === 'error' ? t('serialPorts.error') : 
-               t('serialPorts.info')}
-        message={message.text}
-        type={message.type}
-      />
     </div>
   )
 })

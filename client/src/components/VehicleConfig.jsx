@@ -5,16 +5,16 @@ import Parameters from './vehicle-config/Parameters'
 import Servos from './vehicle-config/Servos'
 import FlightModes from './vehicle-config/FlightModes'
 import SerialPorts from './vehicle-config/SerialPorts'
-import ConfirmModal from './ConfirmModal'
-import Modal from './Modal'
+import UnifiedModal from './UnifiedModal'
+import { useNotification } from '../contexts/NotificationContext'
 
 function VehicleConfig({ systemId, onClose }) {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [activeTab, setActiveTab] = useState('flightModes')
   const [pendingTab, setPendingTab] = useState(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   
   // Refs para acceder a los métodos de los componentes hijos
   const flightModesRef = useRef(null)
@@ -120,31 +120,21 @@ function VehicleConfig({ systemId, onClose }) {
         await componentRef.saveChanges()
       }
       
-      // Mostrar notificación de éxito
-      setNotification({
-        isOpen: true,
-        title: t('vehicleConfig.saveSuccess.title'),
-        message: t('vehicleConfig.saveSuccess.message', { section: sectionName }),
-        type: 'success'
-      })
+      // Mostrar notificación de éxito con toast
+      notify.success(t('vehicleConfig.saveSuccess.message', { section: sectionName }))
       
       // Cambiar de tab después de guardar
       if (pendingTab) {
         setTimeout(() => {
           setActiveTab(pendingTab)
           setPendingTab(null)
-        }, 500)
+        }, 300)
       }
     } catch (error) {
       console.error('Error guardando cambios:', error)
       
-      // Mostrar notificación de error
-      setNotification({
-        isOpen: true,
-        title: t('vehicleConfig.saveError.title'),
-        message: t('vehicleConfig.saveError.message', { section: sectionName }),
-        type: 'error'
-      })
+      // Mostrar notificación de error con toast
+      notify.error(t('vehicleConfig.saveError.message', { section: sectionName }))
     } finally {
       setSaving(false)
       setShowConfirmModal(false)
@@ -173,24 +163,33 @@ function VehicleConfig({ systemId, onClose }) {
 
   return (
     <div className="vehicle-config-container">
-      <Modal
-        isOpen={notification.isOpen}
-        onClose={() => setNotification({ isOpen: false, title: '', message: '', type: 'info' })}
-        title={notification.title}
-        message={notification.message}
-        type={notification.type}
-      />
-      
-      <ConfirmModal
+      {/* Modal de confirmación para cambios sin guardar */}
+      <UnifiedModal
         isOpen={showConfirmModal}
         title={t('vehicleConfig.unsavedChanges.title')}
         message={t('vehicleConfig.unsavedChanges.message')}
-        onConfirm={handleConfirmSave}
-        onCancel={handleConfirmDiscard}
-        onClose={handleCancelModal}
-        confirmText={t('vehicleConfig.unsavedChanges.save')}
-        cancelText={t('vehicleConfig.unsavedChanges.discard')}
-        isLoading={saving}
+        type="warning"
+        closeOnBackdrop={!saving}
+        buttons={[
+          {
+            label: t('vehicleConfig.unsavedChanges.discard'),
+            onClick: handleConfirmDiscard,
+            variant: 'cancel',
+            disabled: saving
+          },
+          {
+            label: t('modal.cancel'),
+            onClick: handleCancelModal,
+            variant: 'secondary',
+            disabled: saving
+          },
+          {
+            label: t('vehicleConfig.unsavedChanges.save'),
+            onClick: handleConfirmSave,
+            variant: 'confirm',
+            loading: saving
+          }
+        ]}
       />
       
       <div className="vehicle-config-sidebar">

@@ -4,16 +4,18 @@ import TopBar from './components/TopBar'
 import MainContent from './components/MainContent'
 import Settings from './components/Settings'
 import VehicleConfig from './components/VehicleConfig'
-import ConfirmModal from './components/ConfirmModal'
-import Modal from './components/Modal'
+import UnifiedModal from './components/UnifiedModal'
+import ToastContainer from './components/ToastContainer'
+import { NotificationProvider, useNotification } from './contexts/NotificationContext'
+import { ParametersProvider } from './contexts/ParametersContext'
 import { useTranslation } from 'react-i18next'
 
-function App() {
+function AppContent() {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [currentView, setCurrentView] = useState('main') // 'main', 'settings', 'vehicleConfig'
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null, systemId: null })
-  const [resultModal, setResultModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [actionLoading, setActionLoading] = useState(false)
 
   const handleArmDisarmRequest = (action, systemId) => {
@@ -44,29 +46,16 @@ function App() {
       setConfirmModal({ isOpen: false, action: null, systemId: null })
 
       if (result.success) {
-        setResultModal({
-          isOpen: true,
-          title: action === 'arm' ? t('sidebar.actions.armSuccess') : t('sidebar.actions.disarmSuccess'),
-          message: result.message || (action === 'arm' ? t('sidebar.actions.armSuccessMessage') : t('sidebar.actions.disarmSuccessMessage')),
-          type: 'success'
-        })
+        const successMessage = result.message || (action === 'arm' ? t('sidebar.actions.armSuccessMessage') : t('sidebar.actions.disarmSuccessMessage'))
+        notify.success(successMessage)
       } else {
-        setResultModal({
-          isOpen: true,
-          title: action === 'arm' ? t('sidebar.actions.armError') : t('sidebar.actions.disarmError'),
-          message: result.message || (action === 'arm' ? t('sidebar.actions.armErrorMessage') : t('sidebar.actions.disarmErrorMessage')),
-          type: 'error'
-        })
+        const errorMessage = result.message || (action === 'arm' ? t('sidebar.actions.armErrorMessage') : t('sidebar.actions.disarmErrorMessage'))
+        notify.error(errorMessage)
       }
     } catch (error) {
       setActionLoading(false)
       setConfirmModal({ isOpen: false, action: null, systemId: null })
-      setResultModal({
-        isOpen: true,
-        title: t('sidebar.actions.connectionError'),
-        message: t('sidebar.actions.connectionErrorMessage'),
-        type: 'error'
-      })
+      notify.error(t('sidebar.actions.connectionErrorMessage'))
     }
   }
 
@@ -105,26 +94,44 @@ function App() {
       />
       {renderView()}
       
-      {/* Modal de confirmación global */}
-      <ConfirmModal
+      {/* Toast notifications */}
+      <ToastContainer />
+      
+      {/* Modal de confirmación global para arm/disarm */}
+      <UnifiedModal
         isOpen={confirmModal.isOpen}
         onClose={() => !actionLoading && setConfirmModal({ isOpen: false, action: null, systemId: null })}
-        onConfirm={executeArmDisarm}
         title={confirmModal.title}
         message={confirmModal.message}
         type="danger"
-        isLoading={actionLoading}
-      />
-
-      {/* Modal de resultado global */}
-      <Modal
-        isOpen={resultModal.isOpen}
-        onClose={() => setResultModal({ isOpen: false, title: '', message: '', type: 'info' })}
-        title={resultModal.title}
-        message={resultModal.message}
-        type={resultModal.type}
+        closeOnBackdrop={!actionLoading}
+        buttons={[
+          {
+            label: t('modal.cancel'),
+            onClick: () => setConfirmModal({ isOpen: false, action: null, systemId: null }),
+            variant: 'cancel',
+            disabled: actionLoading
+          },
+          {
+            label: t('modal.confirm'),
+            onClick: executeArmDisarm,
+            variant: 'confirm',
+            loading: actionLoading
+          }
+        ]}
       />
     </div>
+  )
+}
+
+// Wrapper principal con providers
+function App() {
+  return (
+    <NotificationProvider>
+      <ParametersProvider>
+        <AppContent />
+      </ParametersProvider>
+    </NotificationProvider>
   )
 }
 

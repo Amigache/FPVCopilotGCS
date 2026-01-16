@@ -1,5 +1,7 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNotification } from '../../contexts/NotificationContext'
+import useVehicleConfigSection from '../../hooks/useVehicleConfigSection'
 import './common.css'
 import './FlightModes.css'
 
@@ -79,27 +81,86 @@ const ROVER_MODES = {
 
 const FlightModes = forwardRef(({ systemId }, ref) => {
   const { t } = useTranslation()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [flightModes, setFlightModes] = useState({})
+  const notify = useNotification()
+  const [flightModes, setFlightModes] = useState(null)
   const [flightModeChannel, setFlightModeChannel] = useState(5)
-  const [originalValues, setOriginalValues] = useState({})
-  const [modified, setModified] = useState(false)
-  const [message, setMessage] = useState({ text: '', type: '' })
   const [vehicleType, setVehicleType] = useState(null)
   const [availableModes, setAvailableModes] = useState(COPTER_MODES)
 
+  // Función para cargar datos desde el Map de parámetros
+  const loadDataFn = useCallback(async (paramsMap) => {
+    const modes = {}
+    let channel = 5
+    
+    // Leer parámetros FLTMODE1 a FLTMODE6
+    for (let i = 1; i <= 6; i++) {
+      const param = paramsMap.get(`FLTMODE${i}`)
+      if (param && param.value !== null) {
+        modes[i] = parseInt(param.value)
+      }
+    }
+    
+    // Leer FLTMODE_CH
+    const channelParam = paramsMap.get('FLTMODE_CH')
+    if (channelParam && channelParam.value !== null) {
+      channel = parseInt(channelParam.value)
+    }
+    
+    setFlightModes(modes)
+    setFlightModeChannel(channel)
+    
+    return {
+      originalValues: { ...modes, channel }
+    }
+  }, [])
+
+  // Función para obtener parámetros modificados
+  const getChangedParams = useCallback(() => {
+    const paramsToUpdate = []
+    const { channel: originalChannel, ...originalModes } = configSection.originalValues
+    
+    // Modos de vuelo modificados
+    for (let i = 1; i <= 6; i++) {
+      if (flightModes[i] !== originalModes[i]) {
+        paramsToUpdate.push({
+          name: `FLTMODE${i}`,
+          value: flightModes[i]
+        })
+      }
+    }
+    
+    // Canal si cambió
+    if (flightModeChannel !== originalChannel) {
+      paramsToUpdate.push({
+        name: 'FLTMODE_CH',
+        value: flightModeChannel
+      })
+    }
+    
+    return paramsToUpdate
+  }, [flightModes, flightModeChannel])
+
+  // Callback después de guardar
+  const onSaveSuccess = useCallback(() => {
+    configSection.updateOriginalValues({ ...flightModes, channel: flightModeChannel })
+  }, [flightModes, flightModeChannel])
+
+  // Hook de configuración
+  const configSection = useVehicleConfigSection({
+    loadDataFn,
+    getChangedParams,
+    onSaveSuccess,
+    t
+  })
+
   // Exponer métodos al componente padre
   useImperativeHandle(ref, () => ({
-    hasUnsavedChanges: () => modified,
-    saveChanges: handleSave,
+    hasUnsavedChanges: configSection.hasUnsavedChanges,
+    saveChanges: () => configSection.saveChanges(),
     resetChanges: () => {
-      // Restaurar valores originales
-      const { channel, ...modes } = originalValues
+      const { channel, ...modes } = configSection.resetChanges()
       setFlightModes(modes)
       setFlightModeChannel(channel || 5)
-      setModified(false)
-      setMessage({ text: '', type: '' })
     }
   }))
 
@@ -109,7 +170,7 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
 
   useEffect(() => {
     if (vehicleType !== null) {
-      loadFlightModes()
+      configSection.loadData()
     }
   }, [vehicleType])
 
@@ -137,48 +198,6 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
     }
   }
 
-  const showMessage = (text, type) => {
-    setMessage({ text, type })
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000)
-  }
-
-  const loadFlightModes = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch('/api/mavlink/parameters')
-      const data = await response.json()
-      
-      if (data.parameters) {
-        const modes = {}
-        let channel = 5
-        
-        data.parameters.forEach(param => {
-          // Buscar parámetros FLTMODE1 a FLTMODE6
-          const modeMatch = param.name.match(/^FLTMODE(\d)$/)
-          if (modeMatch) {
-            const slotNum = parseInt(modeMatch[1])
-            modes[slotNum] = parseInt(param.value)
-          }
-          
-          // Buscar parámetro FLTMODE_CH
-          if (param.name === 'FLTMODE_CH') {
-            channel = parseInt(param.value)
-          }
-        })
-        
-        setFlightModes(modes)
-        setFlightModeChannel(channel)
-        setOriginalValues({ ...modes, channel })
-        setModified(false)
-      }
-    } catch (error) {
-      console.error('Error loading flight modes:', error)
-      showMessage(t('flightModes.errorLoading'), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleModeChange = (slot, newValue) => {
     const newValueInt = parseInt(newValue)
     
@@ -197,74 +216,24 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
   }
 
   const checkIfModified = (modes, channel) => {
+    const { channel: originalChannel, ...originalModes } = configSection.originalValues
     let isModified = false
     
     // Check if any mode changed
     for (let i = 1; i <= 6; i++) {
-      if (modes[i] !== originalValues[i]) {
+      if (modes[i] !== originalModes[i]) {
         isModified = true
         break
       }
     }
     
     // Check if channel changed
-    if (channel !== originalValues.channel) {
+    if (channel !== originalChannel) {
       isModified = true
     }
     
-    setModified(isModified)
-  }
-
-  const handleSave = async () => {
-    if (!modified) {
-      showMessage(t('flightModes.noChanges'), 'info')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const promises = []
-      
-      // Save flight modes
-      for (let i = 1; i <= 6; i++) {
-        if (flightModes[i] !== originalValues[i]) {
-          const paramName = `FLTMODE${i}`
-          promises.push(
-            fetch('/api/mavlink/parameters/set', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: paramName, value: flightModes[i] })
-            })
-          )
-        }
-      }
-      
-      // Save channel if changed
-      if (flightModeChannel !== originalValues.channel) {
-        promises.push(
-          fetch('/api/mavlink/parameters/set', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'FLTMODE_CH', value: flightModeChannel })
-          })
-        )
-      }
-      
-      const results = await Promise.all(promises)
-      const allSuccess = results.every(r => r.ok)
-      
-      if (allSuccess) {
-        showMessage(t('flightModes.successSave'), 'success')
-        // Reload to get updated values
-        setTimeout(() => loadFlightModes(), 500)
-      } else {
-        showMessage(t('flightModes.errorSave'), 'error')
-      }
-    } catch (error) {
-      console.error('Error saving flight modes:', error)
-      showMessage(t('flightModes.errorSave'), 'error')
-    } finally {
-      setSaving(false)
+    if (isModified) {
+      configSection.markAsModified()
     }
   }
 
@@ -276,7 +245,7 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
     return t('flightModes.modes.Unknown', `Unknown (${value})`)
   }
 
-  if (loading) {
+  if (configSection.loading || flightModes === null) {
     return (
       <div className="config-section">
         <div className="loading-container">
@@ -296,22 +265,16 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
         </div>
         <div className="header-right">
           <button
-            onClick={handleSave}
-            disabled={!modified || saving}
-            className={`save-button ${modified ? 'modified' : ''}`}
+            onClick={() => configSection.saveChanges()}
+            disabled={!configSection.modified || configSection.saving}
+            className={`save-button ${configSection.modified ? 'modified' : ''}`}
           >
-            {saving ? t('flightModes.saving') : 
-             modified ? t('flightModes.saveChanges') : 
+            {configSection.saving ? t('flightModes.saving') : 
+             configSection.modified ? t('flightModes.saveChanges') : 
              t('flightModes.noChanges')}
           </button>
         </div>
       </div>
-
-      {message.text && (
-        <div className={`message message-${message.type}`}>
-          {message.text}
-        </div>
-      )}
 
       {/* Channel Selector */}
       <div className="channel-selector-container">
@@ -320,7 +283,7 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
           <span className="label-text">{t('flightModes.channel')}</span>
         </label>
         <select
-          className={`channel-select ${flightModeChannel !== originalValues.channel ? 'modified' : ''}`}
+          className={`channel-select ${flightModeChannel !== configSection.originalValues.channel ? 'modified' : ''}`}
           value={flightModeChannel}
           onChange={(e) => handleChannelChange(e.target.value)}
         >
@@ -338,11 +301,11 @@ const FlightModes = forwardRef(({ systemId }, ref) => {
           <div key={slot} className="mode-item">
             <label className="mode-label">
               {t('flightModes.mode')} {slot}
-              {flightModes[slot] !== originalValues[slot] && <span className="modified-indicator">*</span>}
+              {flightModes[slot] !== configSection.originalValues[slot] && <span className="modified-indicator">*</span>}
             </label>
             <select
-              className={`mode-select ${flightModes[slot] !== originalValues[slot] ? 'modified' : ''}`}
-              value={flightModes[slot] || 0}
+              className={`mode-select ${flightModes[slot] !== configSection.originalValues[slot] ? 'modified' : ''}`}
+              value={flightModes[slot] !== undefined ? flightModes[slot] : 0}
               onChange={(e) => handleModeChange(slot, e.target.value)}
             >
               {Object.entries(availableModes).map(([value, name]) => (

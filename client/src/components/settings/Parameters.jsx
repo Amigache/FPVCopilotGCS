@@ -1,20 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import './Parameters.css'
-import Modal from '../Modal'
 import OnScreenKeyboard from '../OnScreenKeyboard'
+import { useNotification } from '../../contexts/NotificationContext'
+import { useParameters } from '../../contexts/ParametersContext'
 
 function Parameters() {
   const { t } = useTranslation()
-  const [parameters, setParameters] = useState([])
+  const notify = useNotification()
+  const { getAllParameters, setParameter, requestParameters: ctxRequestParameters, parameterStats, isConnected, loadParameters: ctxLoadParameters } = useParameters()
   const [filteredParams, setFilteredParams] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
-  const [paramStats, setParamStats] = useState({ total: 0, received: 0, complete: false })
-  const [isConnected, setIsConnected] = useState(false)
   const [editingParam, setEditingParam] = useState(null)
   const [editValue, setEditValue] = useState('')
-  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', fieldType: 'search', initialValue: '', keyboardType: 'text' })
 
   useEffect(() => {
@@ -23,70 +22,27 @@ function Parameters() {
 
   useEffect(() => {
     filterParameters()
-  }, [searchTerm, parameters])
+  }, [searchTerm])
 
   const loadParameters = async () => {
-    try {
-      // Primero verificar si hay conexión activa
-      const statusResponse = await fetch('/api/mavlink/parameters/status')
-      const statusData = await statusResponse.json()
-      setIsConnected(statusData.connected || false)
-      
-      // Si no hay conexión activa, limpiar datos
-      if (!statusData.connected) {
-        setParameters([])
-        setParamStats({ total: 0, received: 0, complete: false })
-        return
-      }
-      
-      // Si hay conexión, cargar parámetros
-      const response = await fetch('/api/mavlink/parameters')
-      const data = await response.json()
-      setParameters(data.parameters || [])
-      setParamStats({
-        total: data.total,
-        received: data.received,
-        complete: data.complete
-      })
-    } catch (error) {
-      console.error('Error cargando parámetros:', error)
-      setIsConnected(false)
-      setParameters([])
-      setParamStats({ total: 0, received: 0, complete: false })
-    }
+    await ctxLoadParameters()
   }
 
   const requestParameters = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/mavlink/parameters/request', {
-        method: 'POST'
-      })
-      const result = await response.json()
+      const result = await ctxRequestParameters()
       
       if (result.success) {
         // Polling para actualizar el progreso en tiempo real
-        const pollInterval = setInterval(async () => {
-          const progressResponse = await fetch('/api/mavlink/parameters')
-          const progressData = await progressResponse.json()
-          
-          setParameters(progressData.parameters || [])
-          setParamStats({
-            total: progressData.total,
-            received: progressData.received,
-            complete: progressData.complete
-          })
+        const pollInterval = setInterval(() => {
+          // El contexto ya está actualizando los parámetros automáticamente
           
           // Si está completo, detener el polling
-          if (progressData.complete && progressData.total > 0) {
+          if (parameterStats.complete && parameterStats.total > 0) {
             clearInterval(pollInterval)
             setLoading(false)
-            setModal({
-              isOpen: true,
-              title: t('parameters.modals.downloadComplete'),
-              message: t('parameters.modals.downloadSuccess', { count: progressData.total }),
-              type: 'success'
-            })
+            notify.success(t('parameters.modals.downloadSuccess', { count: parameterStats.total }))
           }
         }, 200) // Actualizar cada 200ms para ver el progreso
         
@@ -96,33 +52,24 @@ function Parameters() {
           setLoading(false)
         }, 30000)
       } else {
-        setModal({
-          isOpen: true,
-          title: t('parameters.modals.noConnection'),
-          message: result.message || t('parameters.modals.noConnectionMessage'),
-          type: 'warning'
-        })
+        notify.warning(result.message || t('parameters.modals.noConnectionMessage'))
         setLoading(false)
       }
     } catch (error) {
       console.error('Error solicitando parámetros:', error)
-      setModal({
-        isOpen: true,
-        title: t('parameters.modals.connectionError'),
-        message: t('parameters.modals.serverConnectionError'),
-        type: 'error'
-      })
+      notify.error(t('parameters.modals.serverConnectionError'))
       setLoading(false)
     }
   }
 
   const filterParameters = () => {
+    const allParams = getAllParameters()
     if (!searchTerm) {
-      setFilteredParams(parameters)
+      setFilteredParams(allParams)
       return
     }
     
-    const filtered = parameters.filter(param =>
+    const filtered = allParams.filter(param =>
       param.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
     setFilteredParams(filtered)
@@ -140,55 +87,22 @@ function Parameters() {
 
   const saveParameter = async (paramName) => {
     try {
-      const response = await fetch('/api/mavlink/parameters/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: paramName, value: editValue })
-      })
-      
-      const result = await response.json()
+      const result = await setParameter(paramName, editValue)
       
       if (result.success) {
-        setModal({
-          isOpen: true,
-          title: t('parameters.modals.parameterUpdated'),
-          message: t('parameters.modals.parameterUpdateSuccess', { name: paramName }),
-          type: 'success'
-        })
-        loadParameters()
+        notify.success(t('parameters.modals.parameterUpdateSuccess', { name: paramName }))
         cancelEdit()
       } else {
-        setModal({
-          isOpen: true,
-          title: t('parameters.modals.saveError'),
-          message: result.message || t('parameters.modals.parameterUpdateError'),
-          type: 'error'
-        })
+        notify.error(result.message || t('parameters.modals.parameterUpdateError'))
       }
     } catch (error) {
       console.error('Error guardando parámetro:', error)
-      setModal({
-        isOpen: true,
-        title: t('parameters.modals.connectionError'),
-        message: t('parameters.modals.saveConnectionError'),
-        type: 'error'
-      })
+      notify.error(t('parameters.modals.saveConnectionError'))
     }
-  }
-
-  const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '', type: 'info' })
   }
 
   return (
     <div className="settings-section">
-      <Modal
-        isOpen={modal.isOpen}
-        onClose={closeModal}
-        title={modal.title}
-        message={modal.message}
-        type={modal.type}
-      />
       
       <div className="section-header">
         <div>
@@ -206,26 +120,26 @@ function Parameters() {
         </button>
       </div>
 
-      {isConnected && paramStats.total > 0 && (
+      {isConnected && parameterStats.total > 0 && (
         <div className="param-stats">
           <div className="stat-item">
             <span className="stat-label">{t('parameters.stats.total')}:</span>
-            <span className="stat-value">{paramStats.total}</span>
+            <span className="stat-value">{parameterStats.total}</span>
           </div>
           <div className="stat-item">
             <span className="stat-label">{t('parameters.stats.received')}:</span>
-            <span className="stat-value">{paramStats.received}</span>
+            <span className="stat-value">{parameterStats.received}</span>
           </div>
           <div className="stat-item">
             <span className="stat-label">{t('parameters.stats.progress')}:</span>
             <span className="stat-value">
-              {paramStats.total > 0 ? Math.round((paramStats.received / paramStats.total) * 100) : 0}%
+              {parameterStats.total > 0 ? Math.round((parameterStats.received / parameterStats.total) * 100) : 0}%
             </span>
           </div>
           <div className="stat-item">
             <span className="stat-label">{t('parameters.stats.status')}:</span>
-            <span className={`stat-badge ${paramStats.complete ? 'complete' : 'incomplete'}`}>
-              {paramStats.complete ? t('parameters.stats.complete') : t('parameters.stats.downloading')}
+            <span className={`stat-badge ${parameterStats.complete ? 'complete' : 'incomplete'}`}>
+              {parameterStats.complete ? t('parameters.stats.complete') : t('parameters.stats.downloading')}
             </span>
           </div>
         </div>
@@ -253,7 +167,7 @@ function Parameters() {
 
         {filteredParams.length === 0 ? (
           <div className="empty-state">
-            {parameters.length === 0 ? (
+            {getAllParameters().length === 0 ? (
               <>
                 <div className="empty-icon">📋</div>
                 <p>{t('parameters.noParameters')}</p>

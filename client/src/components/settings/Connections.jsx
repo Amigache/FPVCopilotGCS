@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import './Connections.css'
-import Modal from '../Modal'
 import ParameterDownloadModal from '../ParameterDownloadModal'
 import OnScreenKeyboard from '../OnScreenKeyboard'
+import { useNotification } from '../../contexts/NotificationContext'
 
 function Connections() {
   const { t } = useTranslation()
-  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
+  const notify = useNotification()
   const [connecting, setConnecting] = useState(false)
   const [showParamDownload, setShowParamDownload] = useState(false)
   const [connections, setConnections] = useState([])
@@ -97,10 +97,6 @@ function Connections() {
     }
   }, [activeConnection])
 
-  const closeModal = () => {
-    setModal({ isOpen: false, title: '', message: '', type: 'info' })
-  }
-
   const handleDisconnect = async () => {
     try {
       const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
@@ -116,12 +112,7 @@ function Connections() {
       }
     } catch (error) {
       console.error('Error desconectando:', error)
-      setModal({
-        isOpen: true,
-        title: t('connections.messages.error'),
-        message: t('connections.messages.disconnectError'),
-        type: 'error'
-      })
+      notify.error(t('connections.messages.disconnectError'))
     }
   }
 
@@ -151,12 +142,7 @@ function Connections() {
         if (isTcpServer) {
           // Modo servidor: No solicitar parámetros aún, esperar a que un cliente se conecte
           if (!isAutoConnect) {
-            setModal({
-              isOpen: true,
-              title: t('connections.messages.serverStarted'),
-              message: t('connections.messages.serverListening', { port: connection.config.port }),
-              type: 'info'
-            })
+            notify.info(t('connections.messages.serverListening', { port: connection.config.port }))
           }
         } else {
           // Modo cliente o serial: Solicitar parámetros inmediatamente
@@ -172,23 +158,13 @@ function Connections() {
             } else {
               // Conexión OK pero no se pudieron solicitar parámetros
               if (!isAutoConnect) {
-                setModal({
-                  isOpen: true,
-                  title: t('connections.messages.warning'),
-                  message: t('connections.messages.paramsRequestError', { message: paramResult.message }),
-                  type: 'warning'
-                })
+                notify.warning(t('connections.messages.paramsRequestError', { message: paramResult.message }))
               }
             }
           } catch (error) {
             console.error('Error iniciando descarga de parámetros:', error)
             if (!isAutoConnect) {
-              setModal({
-                isOpen: true,
-                title: t('connections.messages.error'),
-                message: t('connections.messages.paramsError'),
-                type: 'error'
-              })
+              notify.error(t('connections.messages.paramsError'))
             }
           }
         }
@@ -197,12 +173,7 @@ function Connections() {
         localStorage.removeItem('mavlink_active_connection')
         
         if (!isAutoConnect) {
-          setModal({
-            isOpen: true,
-            title: t('connections.messages.connectionError'),
-            message: result.message || t('connections.messages.connectionFailed'),
-            type: 'error'
-          })
+          notify.error(result.message || t('connections.messages.connectionFailed'))
         }
       }
     } catch (error) {
@@ -211,12 +182,7 @@ function Connections() {
       localStorage.removeItem('mavlink_active_connection')
       
       if (!isAutoConnect) {
-        setModal({
-          isOpen: true,
-          title: t('connections.messages.networkError'),
-          message: t('connections.messages.serverNotAvailable'),
-          type: 'error'
-        })
+        notify.error(t('connections.messages.serverNotAvailable'))
       }
     } finally {
       setConnecting(false)
@@ -225,12 +191,7 @@ function Connections() {
 
   const handleAddConnection = () => {
     if (!newConnection.name.trim()) {
-      setModal({
-        isOpen: true,
-        title: t('connections.messages.error'),
-        message: t('connections.messages.nameRequired'),
-        type: 'error'
-      })
+      notify.error(t('connections.messages.nameRequired'))
       return
     }
 
@@ -462,14 +423,6 @@ function Connections() {
 
   return (
     <div className="settings-section">
-      <Modal
-        isOpen={modal.isOpen}
-        onClose={closeModal}
-        title={modal.title}
-        message={modal.message}
-        type={modal.type}
-      />
-
       <div className="connections-header">
         <div>
           <h2 className="section-title">{t('connections.title')}</h2>

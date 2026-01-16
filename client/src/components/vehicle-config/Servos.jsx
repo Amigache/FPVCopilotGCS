@@ -1,5 +1,7 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNotification } from '../../contexts/NotificationContext'
+import useVehicleConfigSection from '../../hooks/useVehicleConfigSection'
 import './common.css'
 import './Servos.css'
 
@@ -66,74 +68,75 @@ const SERVO_FUNCTIONS = {
 
 const Servos = forwardRef(({ systemId }, ref) => {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [servoOutputs, setServoOutputs] = useState({})
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
-  const [message, setMessage] = useState({ text: '', type: '' })
   const [modifiedOutputs, setModifiedOutputs] = useState({})
-  const [originalValues, setOriginalValues] = useState({})
-  // Número de salidas de servo a mostrar (típicamente 8-16)
   const NUM_OUTPUTS = 16
+
+  // Función para cargar datos desde el Map de parámetros
+  const loadDataFn = useCallback(async (paramsMap) => {
+    const servoParams = {}
+    for (let i = 1; i <= NUM_OUTPUTS; i++) {
+      const paramName = `SERVO${i}_FUNCTION`
+      const param = paramsMap.get(paramName)
+      if (param && param.value !== undefined && param.value !== null) {
+        servoParams[i] = parseInt(param.value)
+      }
+    }
+    
+    setServoOutputs(servoParams)
+    setModifiedOutputs({})
+    return { originalValues: servoParams }
+  }, [NUM_OUTPUTS])
+
+  // Función para obtener parámetros modificados
+  const getChangedParams = useCallback(() => {
+    const paramsToUpdate = []
+    
+    for (const [output, value] of Object.entries(servoOutputs)) {
+      if (value !== configSection.originalValues[output]) {
+        paramsToUpdate.push({
+          name: `SERVO${output}_FUNCTION`,
+          value: parseInt(value)
+        })
+      }
+    }
+    
+    return paramsToUpdate
+  }, [servoOutputs])
+
+  // Callback después de guardar
+  const onSaveSuccess = useCallback(() => {
+    setModifiedOutputs({})
+  }, [])
+
+  // Hook de configuración
+  const configSection = useVehicleConfigSection({
+    loadDataFn,
+    getChangedParams,
+    onSaveSuccess,
+    t
+  })
+
+  // Número de salidas de servo a mostrar (típicamente 8-16)
 
   // Exponer métodos al componente padre
   useImperativeHandle(ref, () => ({
-    hasUnsavedChanges: () => Object.keys(modifiedOutputs).length > 0,
-    saveChanges: handleSaveModified,
+    hasUnsavedChanges: configSection.hasUnsavedChanges,
+    saveChanges: () => configSection.saveChanges(),
     resetChanges: () => {
-      setServoOutputs({ ...originalValues })
-      setModifiedOutputs({})
-      setMessage({ text: '', type: '' })
+      setServoOutputs({ ...configSection.originalValues })
+      configSection.resetChanges()
     }
   }))
 
   useEffect(() => {
-    loadServoFunctions()
+    configSection.loadData()
   }, [])
-
-  const loadServoFunctions = async () => {
-    try {
-      // Verificar estado de conexión
-      const statusResponse = await fetch('/api/mavlink/parameters/status')
-      const statusData = await statusResponse.json()
-      setIsConnected(statusData.connected || false)
-
-      if (!statusData.connected) {
-        setServoOutputs({})
-        return
-      }
-
-      setLoading(true)
-      
-      // Cargar parámetros SERVO*_FUNCTION
-      const response = await fetch('/api/mavlink/parameters')
-      const data = await response.json()
-      
-      if (data.parameters) {
-        const servoParams = {}
-        data.parameters.forEach(param => {
-          // Buscar parámetros SERVO*_FUNCTION
-          const match = param.name.match(/^SERVO(\d+)_FUNCTION$/)
-          if (match) {
-            const outputNum = parseInt(match[1])
-            servoParams[outputNum] = parseInt(param.value)
-          }
-        })
-        setServoOutputs(servoParams)
-        setOriginalValues(servoParams)
-        setModifiedOutputs({})
-      }
-    } catch (error) {
-      console.error('Error loading servo functions:', error)
-      showMessage(t('servos.errorLoading'), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleServoFunctionChange = (outputNum, newValue) => {
     const newValueInt = parseInt(newValue)
-    const originalValue = originalValues[outputNum] || 0
+    const originalValue = configSection.originalValues[outputNum] || 0
     
     // Actualizar estado local
     setServoOutputs(prev => ({
@@ -147,6 +150,7 @@ const Servos = forwardRef(({ systemId }, ref) => {
         ...prev,
         [outputNum]: newValueInt
       }))
+      configSection.markAsModified()
     } else {
       // Si vuelve al valor original, quitar de modificados
       setModifiedOutputs(prev => {
@@ -154,66 +158,10 @@ const Servos = forwardRef(({ systemId }, ref) => {
         delete newModified[outputNum]
         return newModified
       })
-    }
-  }
-
-  const handleSaveModified = async () => {
-    if (Object.keys(modifiedOutputs).length === 0) {
-      showMessage(t('servos.noChanges'), 'info')
-      return
-    }
-
-    try {
-      setSaving(true)
-      const errors = []
-      
-      for (const [outputNum, value] of Object.entries(modifiedOutputs)) {
-        const paramName = `SERVO${outputNum}_FUNCTION`
-        
-        try {
-          const response = await fetch('/api/mavlink/parameters/set', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              name: paramName,
-              value: parseInt(value) 
-            }),
-          })
-
-          const result = await response.json()
-          
-          if (!response.ok || !result.success) {
-            console.error(`Failed to save ${paramName}:`, result)
-            errors.push(paramName)
-          }
-        } catch (error) {
-          console.error(`Error saving ${paramName}:`, error)
-          errors.push(paramName)
-        }
+      if (Object.keys({ ...modifiedOutputs, [outputNum]: undefined }).filter(k => modifiedOutputs[k] !== undefined).length === 0) {
+        configSection.markAsModified(false)
       }
-
-      if (errors.length === 0) {
-        showMessage(t('servos.successSaveAll', { count: Object.keys(modifiedOutputs).length }), 'success')
-        setOriginalValues({ ...servoOutputs })
-        setModifiedOutputs({})
-        // Recargar parámetros para mantener sincronización con otras secciones
-        setTimeout(() => loadServoFunctions(), 500)
-      } else {
-        showMessage(t('servos.errorSavePartial', { errors: errors.join(', ') }), 'error')
-      }
-    } catch (error) {
-      console.error('Error updating servo functions:', error)
-      showMessage(t('servos.errorSave'), 'error')
-    } finally {
-      setSaving(false)
     }
-  }
-
-  const showMessage = (text, type) => {
-    setMessage({ text, type })
-    setTimeout(() => setMessage({ text: '', type: '' }), 5000)
   }
 
   const getFunctionName = (value) => {
@@ -224,19 +172,7 @@ const Servos = forwardRef(({ systemId }, ref) => {
     return t('servos.functions.Unknown', `Unknown (${value})`)
   }
 
-  if (!isConnected) {
-    return (
-      <div className="config-section">
-        <div className="empty-state">
-          <div className="empty-icon">🔌</div>
-          <h3>{t('servos.noConnection')}</h3>
-          <p>{t('servos.noConnectionHint')}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading) {
+  if (configSection.loading) {
     return (
       <div className="config-section">
         <div className="loading-container">
@@ -256,24 +192,18 @@ const Servos = forwardRef(({ systemId }, ref) => {
         </div>
         <div className="header-right">
           <button 
-            onClick={handleSaveModified}
-            disabled={Object.keys(modifiedOutputs).length === 0 || saving}
+            onClick={() => configSection.saveChanges()}
+            disabled={Object.keys(modifiedOutputs).length === 0 || configSection.saving}
             className={`save-button ${Object.keys(modifiedOutputs).length > 0 ? 'modified' : ''}`}
           >
-            {saving ? t('servos.saving') : 
+            {configSection.saving ? t('servos.saving') : 
              Object.keys(modifiedOutputs).length > 0 ? `${t('servos.saveChanges')} (${Object.keys(modifiedOutputs).length})` : 
              t('servos.noChanges')}
           </button>
         </div>
       </div>
 
-      {message.text && (
-        <div className={`message message-${message.type}`}>
-          {message.text}
-        </div>
-      )}
-
-      {loading ? (
+      {configSection.loading ? (
         <div className="loading-container">
           <div className="spinner"></div>
           <p>{t('servos.loading')}</p>
@@ -295,7 +225,7 @@ const Servos = forwardRef(({ systemId }, ref) => {
                   className={`output-select ${isModified ? 'modified' : ''}`}
                   value={currentValue}
                   onChange={(e) => handleServoFunctionChange(outputNum, e.target.value)}
-                  disabled={saving}
+                  disabled={configSection.saving}
                 >
                   {Object.entries(SERVO_FUNCTIONS).map(([value, name]) => (
                     <option key={value} value={value}>
