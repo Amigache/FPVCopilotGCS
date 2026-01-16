@@ -2,12 +2,14 @@
   flex: 1;
   position: relative;
   overflow: hidden;
+  display: flex;
 }
 
 .map-container {
   width: 100%;
   height: 100%;
   z-index: 1;
+  transition: margin-left 0.3s ease;
 }
 
 /* Marcadores de vehículos personalizados */
@@ -51,7 +53,30 @@
   color: #4caf50;
 }
 
-/* Sidebar colapsable */
+/* Sidebar izquierdo - Reduce el contenido */
+.map-sidebar-left {
+  width: 0;
+  height: 100%;
+  background: rgba(10, 14, 39, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  transition: width 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.map-sidebar-left.open {
+  width: 350px;
+}
+
+.map-sidebar-left.closed {
+  width: 0;
+}
+
+/* Sidebar derecho - Se superpone al contenido */
 .map-sidebar {
   position: absolute;
   top: 0;
@@ -149,6 +174,45 @@
   right: 350px;
 }
 
+/* Botón toggle del sidebar izquierdo */
+.sidebar-toggle-left {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 80px;
+  background: rgba(10, 14, 39, 0.95);
+  backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 0 8px 8px 0;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 1001;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle-left.closed {
+  left: 0;
+}
+
+.sidebar-toggle-left.open {
+  left: 350px;
+}
+
+.sidebar-toggle-left:hover {
+  background: rgba(15, 52, 96, 0.95);
+  width: 36px;
+}
+
+.sidebar-toggle-left:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
 /* Controles del mapa */
 .map-controls {
   position: absolute;
@@ -158,6 +222,11 @@
   display: flex;
   flex-direction: row;
   gap: 10px;
+  transition: left 0.3s ease;
+}
+
+.map-controls.shifted {
+  left: 370px;
 }
 
 .map-control-btn {
@@ -407,6 +476,45 @@
   color: #f44336;
 }
 
+/* Botón de configuración del vehículo */
+.configure-vehicle-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.configure-vehicle-btn:hover {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.5);
+  transform: translateY(-1px);
+}
+
+.configure-vehicle-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.4);
+}
+
+.configure-vehicle-btn .btn-icon {
+  font-size: 18px;
+}
+
+.configure-vehicle-btn .btn-text {
+  font-size: 14px;
+}
+
 /* Grid de acciones */
 .actions-grid {
   display: grid;
@@ -441,6 +549,12 @@
 
 .action-button:active {
   transform: translateY(0);
+}
+
+.action-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .action-icon {
@@ -588,4 +702,292 @@
   font-size: 20px;
   width: 24px;
   text-align: center;
+}
+
+/* Estilos para mensajes del sistema */
+.messages-container {
+  padding: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clear-messages-btn {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  border-radius: 8px;
+  color: #f44336;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.clear-messages-btn:hover {
+  background: rgba(244, 67, 54, 0.3);
+  border-color: #f44336;
+  transform: scale(1.05);
+}
+
+.no-messages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  height: 100%;
+}
+
+.no-messages-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-messages p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.no-messages-hint {
+  font-size: 14px !important;
+  opacity: 0.7;
+}
+
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.message-item {
+  background: rgba(15, 52, 96, 0.4);
+  border-left: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.message-item:hover {
+  background: rgba(15, 52, 96, 0.6);
+  transform: translateX(4px);
+}
+
+.message-critical {
+  border-left-color: #d32f2f;
+  background: rgba(211, 47, 47, 0.15);
+}
+
+.message-critical:hover {
+  background: rgba(211, 47, 47, 0.25);
+}
+
+.message-error {
+  border-left-color: #f44336;
+  background: rgba(244, 67, 54, 0.15);
+}
+
+.message-error:hover {
+  background: rgba(244, 67, 54, 0.25);
+}
+
+.message-warning {
+  border-left-color: #ff9800;
+  background: rgba(255, 152, 0, 0.15);
+}
+
+.message-warning:hover {
+  background: rgba(255, 152, 0, 0.25);
+}
+
+.message-notice {
+  border-left-color: #2196f3;
+  background: rgba(33, 150, 243, 0.15);
+}
+
+.message-notice:hover {
+  background: rgba(33, 150, 243, 0.25);
+}
+
+.message-info {
+  border-left-color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.message-info:hover {
+  background: rgba(76, 175, 80, 0.25);
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message-icon {
+  font-size: 16px;
+}
+
+.message-time {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.message-system {
+  margin-left: auto;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.message-text {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Flight Mode Selector */
+.flight-mode-selector {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: rgba(33, 150, 243, 0.1);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 8px;
+}
+
+.flight-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.flight-mode-select {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(15, 52, 96, 0.6);
+  border: 1px solid rgba(33, 150, 243, 0.4);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.flight-mode-select:hover:not(:disabled) {
+  background: rgba(15, 52, 96, 0.8);
+  border-color: rgba(33, 150, 243, 0.6);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.flight-mode-select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}
+
+.flight-mode-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.flight-mode-select option {
+  background: #0f3460;
+  color: #fff;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Flight Mode Selector */
+.flight-mode-selector {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: rgba(33, 150, 243, 0.1);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 8px;
+}
+
+.flight-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.flight-mode-select {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(15, 52, 96, 0.6);
+  border: 1px solid rgba(33, 150, 243, 0.4);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.flight-mode-select:hover:not(:disabled) {
+  background: rgba(15, 52, 96, 0.8);
+  border-color: rgba(33, 150, 243, 0.6);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.flight-mode-select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}
+
+.flight-mode-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.flight-mode-select option {
+  background: #0f3460;
+  color: #fff;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 500;
 }

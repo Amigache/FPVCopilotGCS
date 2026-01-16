@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import './Modal.css'
 
-function ConfirmModal({ isOpen, onClose, onConfirm, title, message, type = 'warning', confirmText, cancelText, isLoading = false }) {
+function ConfirmModal({ isOpen, onClose, onConfirm, onCancel, title, message, type = 'warning', confirmText, cancelText, isLoading = false }) {
   const { t } = useTranslation()
   if (!isOpen) return null
 
@@ -24,6 +24,14 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, type = 'warn
     onConfirm()
   }
 
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel()
+    } else {
+      onClose()
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={isLoading ? undefined : onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -37,7 +45,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, type = 'warn
         <div className="modal-footer">
           <button 
             className="modal-button cancel" 
-            onClick={onClose}
+            onClick={handleCancel}
             disabled={isLoading}
           >
             {cancelText || t('modal.cancel')}

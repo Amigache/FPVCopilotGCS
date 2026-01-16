@@ -10,6 +10,7 @@ class MAVLinkService {
     this.paramCount = 0
     this.receivedParams = 0
     this.paramDownloadComplete = false // Bandera para evitar logs repetitivos
+    this.pendingParamSet = null // Para rastrear PARAM_SET pendientes
     this.listeners = []
     this.connectionType = null
     this.tcpClient = null
@@ -21,6 +22,30 @@ class MAVLinkService {
     
     // Telemetría de múltiples vehículos (por system_id)
     this.vehicles = new Map()
+    
+    // Mensajes del sistema (STATUSTEXT y eventos)
+    this.messages = []
+    this.maxMessages = 100 // Mantener últimos 100 mensajes
+  }
+
+  // Método centralizado para enviar datos por cualquier canal (Serial, TCP, UDP)
+  sendData(buffer) {
+    if (!this.isConnected) {
+      throw new Error('No hay conexión activa')
+    }
+
+    if (this.tcpClient) {
+      // Enviar por TCP
+      this.tcpClient.write(buffer)
+    } else if (this.serialPort) {
+      // Enviar por Serial
+      this.serialPort.write(buffer)
+    } else if (this.udpSocket && this.remoteAddress && this.remotePort) {
+      // Enviar por UDP
+      this.udpSocket.send(buffer, this.remotePort, this.remoteAddress)
+    } else {
+      throw new Error('No hay canal de comunicación disponible')
+    }
   }
 
   // Conectar a la telemetría
@@ -176,8 +201,19 @@ class MAVLinkService {
           type: data.type,
           autopilot: data.autopilot,
           base_mode: data.base_mode,
+          custom_mode: data.custom_mode,
+          flightMode: this.getFlightModeName(data.custom_mode, data.type),
           lastUpdate: Date.now(),
           connected: true
+        })
+        
+        // Añadir mensaje de conexión
+        this.addMessage({
+          systemId: sysId,
+          type: 'info',
+          severity: 6,
+          text: `Vehicle #${sysId} connected - Type: ${this.getVehicleTypeName(data.type)}`,
+          timestamp: Date.now()
         })
       }
       
@@ -186,6 +222,8 @@ class MAVLinkService {
       vehicle.lastUpdate = Date.now()
       vehicle.connected = true
       vehicle.base_mode = data.base_mode
+      vehicle.custom_mode = data.custom_mode
+      vehicle.flightMode = this.getFlightModeName(data.custom_mode, vehicle.type)
     }
 
     // Procesar telemetría solo de vehículos conocidos
@@ -282,9 +320,71 @@ class MAVLinkService {
             }
           }
           break
+        
+        case 253: // STATUSTEXT
+          // Mensajes de texto del vehículo
+          if (data.text) {
+            const severity = data.severity || 6 // 6 = INFO por defecto
+            const text = data.text.replace(/\0/g, '').trim() // Limpiar caracteres nulos
+            
+            if (text) {
+              this.addMessage({
+                systemId: sysId,
+                type: this.getSeverityType(severity),
+                severity: severity,
+                text: text,
+                timestamp: Date.now()
+              })
+            }
+          }
+          break
       }
       
       vehicle.lastUpdate = Date.now()
+    }
+  }
+
+  // Convertir severidad MAVLink a tipo de mensaje
+  getSeverityType(severity) {
+    // MAV_SEVERITY: 0=EMERGENCY, 1=ALERT, 2=CRITICAL, 3=ERROR, 4=WARNING, 5=NOTICE, 6=INFO, 7=DEBUG
+    if (severity <= 2) return 'critical'
+    if (severity === 3) return 'error'
+    if (severity === 4) return 'warning'
+    if (severity === 5) return 'notice'
+    return 'info'
+  }
+
+  // Añadir mensaje al historial
+  addMessage(message) {
+    this.messages.unshift(message) // Añadir al principio
+    
+    // Limitar tamaño del array
+    if (this.messages.length > this.maxMessages) {
+      this.messages.pop()
+    }
+    
+    console.log(`✅ [SysID ${message.systemId}] [${message.type.toUpperCase()}] ${message.text}`)
+  }
+
+  // Obtener mensajes
+  getMessages(systemId = null, limit = 50) {
+    let messages = this.messages
+    
+    // Filtrar por systemId si se especifica
+    if (systemId) {
+      messages = messages.filter(m => m.systemId === systemId)
+    }
+    
+    // Limitar cantidad
+    return messages.slice(0, limit)
+  }
+
+  // Limpiar mensajes
+  clearMessages(systemId = null) {
+    if (systemId) {
+      this.messages = this.messages.filter(m => m.systemId !== systemId)
+    } else {
+      this.messages = []
     }
   }
 
@@ -394,13 +494,8 @@ class MAVLinkService {
       // Construir y enviar mensaje PARAM_REQUEST_LIST
       const message = this.parser.buildParamRequestList(1, 1) // target_system=1, target_component=1
       
-      if (this.tcpClient) {
-        this.tcpClient.write(message)
-        console.log('MAVLink: Solicitando lista de parámetros vía TCP')
-      } else if (this.udpSocket) {
-        // Para UDP se enviará más adelante
-        throw new Error('Solicitud de parámetros vía UDP no implementada aún')
-      }
+      this.sendData(message)
+      console.log('MAVLink: Solicitando lista de parámetros')
       
       return { success: true, message: 'Esperando parámetros del vehículo...' }
     } catch (error) {
@@ -430,12 +525,56 @@ class MAVLinkService {
         throw new Error('No hay conexión activa')
       }
 
-      // TODO: Enviar PARAM_SET (msgid=23) al vehículo
-      this.parameters.set(name, parseFloat(value))
+      // Obtener el primer vehículo disponible
+      const vehicle = Array.from(this.vehicles.values())[0]
+      if (!vehicle) {
+        throw new Error('No hay vehículos conectados')
+      }
+
+      console.log(`[${vehicle.systemId}] → PARAM_SET: ${name} = ${value}`)
       
-      return { success: true, message: 'Parámetro actualizado' }
+      // Guardar el valor esperado para validación
+      this.pendingParamSet = {
+        name: name,
+        expectedValue: parseFloat(value),
+        timestamp: Date.now()
+      }
+      
+      // Construir y enviar mensaje PARAM_SET (targetComponent=1 = autopilot)
+      const paramSetMsg = this.parser.buildParamSet(name, parseFloat(value), vehicle.systemId, 1)
+      this.sendData(paramSetMsg)
+      
+      // Esperar respuesta del vehículo
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Verificar si el parámetro fue actualizado
+      const updatedValue = this.parameters.get(name)
+      const expectedValue = parseFloat(value)
+      
+      // Limpiar pendingParamSet
+      this.pendingParamSet = null
+      
+      // Para INT32, comparar valores enteros
+      const isInt = Number.isInteger(expectedValue)
+      const valuesMatch = isInt 
+        ? Math.round(updatedValue) === Math.round(expectedValue)
+        : Math.abs(updatedValue - expectedValue) < 0.01
+      
+      if (updatedValue !== undefined && valuesMatch) {
+        console.log(`[${vehicle.systemId}] ← Confirmado: ${name} = ${updatedValue}`)
+        return { success: true, message: 'Parámetro actualizado', value: updatedValue }
+      } else {
+        console.warn(`[${vehicle.systemId}] ✗ Rechazado: ${name} (esperado: ${expectedValue}, recibido: ${updatedValue})`)
+        return { 
+          success: false, 
+          message: 'El vehículo rechazó el cambio. El puerto puede no estar disponible o el valor no es válido.',
+          rejectedValue: expectedValue,
+          actualValue: updatedValue
+        }
+      }
     } catch (error) {
       console.error('Error actualizando parámetro:', error)
+      this.pendingParamSet = null
       return { success: false, message: error.message }
     }
   }
@@ -565,17 +704,70 @@ class MAVLinkService {
       }
 
       // Enviar comando
-      if (this.tcpClient) {
-        this.tcpClient.write(buffer)
-      } else if (this.udpSocket && this.remoteAddress) {
-        this.udpSocket.send(buffer, this.remotePort, this.remoteAddress)
-      } else {
-        return { success: false, message: 'No hay canal de comunicación disponible' }
-      }
+      this.sendData(buffer)
+
+      // Añadir mensaje del comando
+      this.addMessage({
+        systemId: systemId,
+        type: 'notice',
+        severity: 5,
+        text: `Command sent: ${action.toUpperCase()}`,
+        timestamp: Date.now()
+      })
 
       return { success: true, message: 'Comando enviado correctamente' }
     } catch (error) {
       console.error('Error enviando comando:', error)
+      return { success: false, message: error.message }
+    }
+  }
+
+  // Cambiar modo de vuelo
+  async setFlightMode(systemId, customMode) {
+    if (!this.isConnected) {
+      return { success: false, message: 'No hay conexión activa con el vehículo' }
+    }
+
+    const vehicle = this.vehicles.get(systemId)
+    if (!vehicle) {
+      return { success: false, message: `Vehículo ${systemId} no encontrado` }
+    }
+
+    // Verificar que el vehículo esté conectado
+    const now = Date.now()
+    const connected = (now - vehicle.lastUpdate) < 5000
+    if (!connected) {
+      return { success: false, message: 'El vehículo no está respondiendo' }
+    }
+
+    try {
+      // MAV_CMD_DO_SET_MODE (176)
+      // Param1: Mode (MAV_MODE)
+      // Param2: Custom mode
+      const buffer = this.createCommandLong(
+        systemId,
+        1, // MAV_COMP_ID_AUTOPILOT1
+        176, // MAV_CMD_DO_SET_MODE
+        1, // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+        customMode, // Custom mode number
+        0, 0, 0, 0, 0
+      )
+
+      this.sendData(buffer)
+
+      // Añadir mensaje
+      const modeName = this.getFlightModeName(customMode, vehicle.type)
+      this.addMessage({
+        systemId: systemId,
+        type: 'notice',
+        severity: 5,
+        text: `Flight mode changed to: ${modeName}`,
+        timestamp: Date.now()
+      })
+
+      return { success: true, message: `Modo cambiado a ${modeName}` }
+    } catch (error) {
+      console.error('Error cambiando modo de vuelo:', error)
       return { success: false, message: error.message }
     }
   }
@@ -656,6 +848,119 @@ class MAVLinkService {
       received: this.receivedParams,
       complete: this.paramDownloadComplete && this.receivedParams === this.paramCount
     }
+  }
+
+  // Obtener nombre del tipo de vehículo
+  getVehicleTypeName(type) {
+    const types = {
+      0: 'Generic',
+      1: 'Fixed Wing',
+      2: 'Quadrotor',
+      3: 'Coaxial',
+      4: 'Helicopter',
+      5: 'Antenna Tracker',
+      6: 'GCS',
+      10: 'Ground Rover',
+      11: 'Surface Boat',
+      12: 'Submarine',
+      13: 'Hexarotor',
+      14: 'Octorotor',
+      15: 'Tricopter',
+      19: 'VTOL Duo Rotor',
+      20: 'VTOL Quad Rotor',
+      21: 'VTOL Tiltrotor'
+    }
+    return types[type] || `Unknown (${type})`
+  }
+
+  // Obtener nombre del modo de vuelo basado en custom_mode y tipo de vehículo
+  // Enums de ArduPilot: https://mavlink.io/en/messages/ardupilotmega.html
+  getFlightModeName(customMode, vehicleType) {
+    // ArduPlane modes (MAV_TYPE_FIXED_WING = 1)
+    if (vehicleType === 1) {
+      const planeModes = {
+        0: 'Manual',
+        1: 'Circle',
+        2: 'Stabilize',
+        3: 'Training',
+        4: 'Acro',
+        5: 'FlyByWireA',
+        6: 'FlyByWireB',
+        7: 'Cruise',
+        8: 'Autotune',
+        10: 'Auto',
+        11: 'RTL',
+        12: 'Loiter',
+        13: 'Takeoff',
+        14: 'Avoid_ADSB',
+        15: 'Guided',
+        17: 'QStabilize',
+        18: 'QHover',
+        19: 'QLoiter',
+        20: 'QLand',
+        21: 'QRTL',
+        22: 'QAutotune',
+        23: 'QAcro',
+        24: 'Thermal'
+      }
+      return planeModes[customMode] || `Unknown (${customMode})`
+    }
+    
+    // ArduCopter modes (MAV_TYPE_QUADROTOR = 2, MAV_TYPE_HELICOPTER = 4, etc.)
+    if ([2, 3, 4, 13, 14, 15].includes(vehicleType)) {
+      const copterModes = {
+        0: 'Stabilize',
+        1: 'Acro',
+        2: 'AltHold',
+        3: 'Auto',
+        4: 'Guided',
+        5: 'Loiter',
+        6: 'RTL',
+        7: 'Circle',
+        8: 'Position',
+        9: 'Land',
+        10: 'OF_Loiter',
+        11: 'Drift',
+        13: 'Sport',
+        14: 'Flip',
+        15: 'AutoTune',
+        16: 'PosHold',
+        17: 'Brake',
+        18: 'Throw',
+        19: 'Avoid_ADSB',
+        20: 'Guided_NoGPS',
+        21: 'Smart_RTL',
+        22: 'FlowHold',
+        23: 'Follow',
+        24: 'ZigZag',
+        25: 'SystemID',
+        26: 'Heli_Autorotate',
+        27: 'Auto_RTL'
+      }
+      return copterModes[customMode] || `Unknown (${customMode})`
+    }
+    
+    // ArduRover modes (MAV_TYPE_GROUND_ROVER = 10)
+    if (vehicleType === 10) {
+      const roverModes = {
+        0: 'Manual',
+        1: 'Acro',
+        2: 'Learning',
+        3: 'Steering',
+        4: 'Hold',
+        5: 'Loiter',
+        6: 'Follow',
+        7: 'Simple',
+        10: 'Auto',
+        11: 'RTL',
+        12: 'SmartRTL',
+        15: 'Guided'
+      }
+      return roverModes[customMode] || `Unknown (${customMode})`
+    }
+    
+    // Fallback para tipos desconocidos
+    return `Mode ${customMode}`
   }
 }
 

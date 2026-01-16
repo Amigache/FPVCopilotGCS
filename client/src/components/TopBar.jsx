@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './TopBar.css'
 
-function TopBar({ onSettingsClick, isSettingsOpen }) {
+function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('es-ES', { 
     hour: '2-digit', 
@@ -12,11 +12,20 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
     signal: 'N/A',
     battery: 'N/A',
     gps: 'N/A',
-    armed: false
+    armed: false,
+    flightMode: 'N/A',
+    systemId: null,
+    custom_mode: 0,
+    vehicleType: null
   })
   const [hasTelemetry, setHasTelemetry] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
+  const [showFlightModeDropdown, setShowFlightModeDropdown] = useState(false)
+  const [availableFlightModes, setAvailableFlightModes] = useState({})
+  const [showArmDropdown, setShowArmDropdown] = useState(false)
+  const dropdownRef = useRef(null)
+  const armDropdownRef = useRef(null)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -46,6 +55,83 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
     return () => clearInterval(interval)
   }, [])
 
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowFlightModeDropdown(false)
+      }
+      if (armDropdownRef.current && !armDropdownRef.current.contains(event.target)) {
+        setShowArmDropdown(false)
+      }
+    }
+
+    if (showFlightModeDropdown || showArmDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showFlightModeDropdown, showArmDropdown])
+
+  const getFlightModesForVehicleType = (vehicleType) => {
+    if (vehicleType === 1) {
+      return {
+        0: 'Manual', 1: 'Circle', 2: 'Stabilize', 3: 'Training', 4: 'Acro',
+        5: 'FlyByWireA', 6: 'FlyByWireB', 7: 'Cruise', 8: 'Autotune',
+        10: 'Auto', 11: 'RTL', 12: 'Loiter', 13: 'Takeoff', 14: 'Avoid_ADSB',
+        15: 'Guided'
+      }
+    }
+    if ([2, 3, 4, 13, 14, 15].includes(vehicleType)) {
+      return {
+        0: 'Stabilize', 1: 'Acro', 2: 'AltHold', 3: 'Auto', 4: 'Guided',
+        5: 'Loiter', 6: 'RTL', 7: 'Circle', 9: 'Land', 15: 'AutoTune',
+        16: 'PosHold', 21: 'Smart_RTL'
+      }
+    }
+    if (vehicleType === 10) {
+      return {
+        0: 'Manual', 3: 'Steering', 4: 'Hold', 5: 'Loiter',
+        10: 'Auto', 11: 'RTL', 15: 'Guided'
+      }
+    }
+    return {}
+  }
+
+  const handleFlightModeChange = async (customMode) => {
+    try {
+      const response = await fetch('/api/mavlink/flightmode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          systemId: telemetry.systemId,
+          customMode: parseInt(customMode)
+        })
+      })
+
+      if (response.ok) {
+        setShowFlightModeDropdown(false)
+      }
+    } catch (error) {
+      console.error('Error changing flight mode:', error)
+    }
+  }
+
+  const handleArmClick = () => {
+    setShowArmDropdown(false)
+    if (onArmDisarmRequest && telemetry.systemId) {
+      onArmDisarmRequest('arm', telemetry.systemId)
+    }
+  }
+
+  const handleDisarmClick = () => {
+    setShowArmDropdown(false)
+    if (onArmDisarmRequest && telemetry.systemId) {
+      onArmDisarmRequest('disarm', telemetry.systemId)
+    }
+  }
+
   useEffect(() => {
     // Cargar telemetría del vehículo principal
     const loadTelemetry = async () => {
@@ -72,7 +158,8 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
             signal: 'N/A',
             battery: 'N/A',
             gps: 'N/A',
-            armed: false
+            armed: false,
+            flightMode: 'N/A'
           })
           return
         }
@@ -90,7 +177,8 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
             signal: 'N/A',
             battery: 'N/A',
             gps: 'N/A',
-            armed: false
+            armed: false,
+            flightMode: 'N/A'
           })
           return
         }
@@ -120,8 +208,15 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
           signal: signalQuality,
           battery: `${vehicle.battery_remaining?.toFixed(0)}%`,
           gps: gpsStatus,
-          armed: !!(vehicle.base_mode & 128) // MAV_MODE_FLAG_SAFETY_ARMED = 128
+          armed: !!(vehicle.base_mode & 128), // MAV_MODE_FLAG_SAFETY_ARMED = 128
+          flightMode: vehicle.flightMode || 'Unknown',
+          systemId: vehicle.systemId,
+          custom_mode: vehicle.custom_mode || 0,
+          vehicleType: vehicle.type
         })
+        
+        // Actualizar modos disponibles
+        setAvailableFlightModes(getFlightModesForVehicleType(vehicle.type))
       } catch (error) {
         // Si hay error de red o cualquier otro error, no hay telemetría
         setHasTelemetry(false)
@@ -129,7 +224,8 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
           signal: 'N/A',
           battery: 'N/A',
           gps: 'N/A',
-          armed: false
+          armed: false,
+          flightMode: 'N/A'
         })
       }
     }
@@ -221,10 +317,79 @@ function TopBar({ onSettingsClick, isSettingsOpen }) {
         
         {/* Estado Armado/Desarmado */}
         {hasTelemetry && (
-          <div className={`indicator ${telemetry.armed ? 'armed' : 'disarmed'}`}>
-            <span className="indicator-icon">{telemetry.armed ? '🔓' : '🔒'}</span>
-            <span className="indicator-label">{t('topbar.status')}</span>
-            <span className="indicator-value">{telemetry.armed ? t('topbar.armed') : t('topbar.disarmed')}</span>
+          <div style={{ position: 'relative' }}>
+            <div className={`indicator ${telemetry.armed ? 'armed' : 'disarmed'} clickable`}
+                 onClick={(e) => {
+                   e.stopPropagation()
+                   setShowArmDropdown(!showArmDropdown)
+                   setShowFlightModeDropdown(false)
+                 }}>
+              <span className="indicator-icon">{telemetry.armed ? '🔓' : '🔒'}</span>
+              <span className="indicator-label">{t('topbar.status')}</span>
+              <span className="indicator-value">{telemetry.armed ? t('topbar.armed') : t('topbar.disarmed')}</span>
+            </div>
+            
+            {showArmDropdown && (
+              <div className="arm-dropdown" ref={armDropdownRef}>
+                <div
+                  className={`arm-dropdown-option arm-option ${telemetry.armed ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!telemetry.armed) {
+                      handleArmClick()
+                    }
+                  }}
+                >
+                  <span className="option-icon">🔓</span>
+                  <span>{t('sidebar.actions.arm')}</span>
+                </div>
+                <div
+                  className={`arm-dropdown-option disarm-option ${!telemetry.armed ? 'disabled' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (telemetry.armed) {
+                      handleDisarmClick()
+                    }
+                  }}
+                >
+                  <span className="option-icon">🔒</span>
+                  <span>{t('sidebar.actions.disarm')}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Modo de Vuelo */}
+        {hasTelemetry && (
+          <div style={{ position: 'relative' }}>
+            <div className="indicator flight-mode clickable" 
+                 onClick={(e) => {
+                   e.stopPropagation()
+                   setShowFlightModeDropdown(!showFlightModeDropdown)
+                   setShowArmDropdown(false)
+                 }}>
+              <span className="indicator-icon">✈️</span>
+              <span className="indicator-label">{t('topbar.flightMode')}</span>
+              <span className="indicator-value">{telemetry.flightMode}</span>
+            </div>
+            
+            {showFlightModeDropdown && (
+              <div className="flight-mode-dropdown" ref={dropdownRef}>
+                {Object.entries(availableFlightModes).map(([mode, name]) => (
+                  <div
+                    key={mode}
+                    className={`flight-mode-option ${parseInt(mode) === telemetry.custom_mode ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFlightModeChange(mode)
+                    }}
+                  >
+                    {t(`flightModes.modes.${name}`)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         

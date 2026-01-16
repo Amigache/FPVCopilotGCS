@@ -5,7 +5,6 @@ import 'leaflet/dist/leaflet.css'
 import './MainContent.css'
 import L from 'leaflet'
 import Modal from './Modal'
-import ConfirmModal from './ConfirmModal'
 
 // Fix para los iconos de Leaflet en React
 delete L.Icon.Default.prototype._getIconUrl
@@ -116,18 +115,20 @@ function MapEventHandler({ onContextMenu }) {
   return null
 }
 
-function MainContent() {
+function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const [vehicles, setVehicles] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(false)
+  const [messages, setMessages] = useState([])
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [expandedCard, setExpandedCard] = useState('info') // 'info' o 'actions'
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null })
   const [resultModal, setResultModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [actionLoading, setActionLoading] = useState(false)
   const [mapLayer, setMapLayer] = useState('street') // 'street' o 'satellite'
+  const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, coords: null })
+  const [availableFlightModes, setAvailableFlightModes] = useState({})
   const [followVehicle, setFollowVehicle] = useState(true) // Seguimiento automático del vehículo
-  const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0, lat: 0, lng: 0 })
   // SITL Ardupilot por defecto: Canberra, Australia
   const defaultPosition = [-35.363261, 149.165230]
 
@@ -140,6 +141,16 @@ function MainContent() {
     
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    // Cargar mensajes inicialmente
+    loadMessages()
+    
+    // Actualizar cada 2 segundos
+    const interval = setInterval(loadMessages, 2000)
+    
+    return () => clearInterval(interval)
+  }, [selectedVehicle])
 
   // Auto-seleccionar vehículo cuando cambia la lista
   useEffect(() => {
@@ -154,7 +165,49 @@ function MainContent() {
     if (selectedVehicle && !connectedVehicles.find(v => v.systemId === selectedVehicle)) {
       setSelectedVehicle(connectedVehicles.length > 0 ? connectedVehicles[0].systemId : null)
     }
+    
+    // Actualizar modos de vuelo disponibles según el tipo de vehículo
+    if (selectedVehicle && connectedVehicles.length > 0) {
+      const vehicle = connectedVehicles.find(v => v.systemId === selectedVehicle)
+      if (vehicle) {
+        setAvailableFlightModes(getFlightModesForVehicleType(vehicle.type))
+      }
+    }
   }, [vehicles, selectedVehicle])
+
+  const getFlightModesForVehicleType = (vehicleType) => {
+    // Plane modes
+    if (vehicleType === 1) {
+      return {
+        0: 'Manual', 1: 'Circle', 2: 'Stabilize', 3: 'Training', 4: 'Acro',
+        5: 'FlyByWireA', 6: 'FlyByWireB', 7: 'Cruise', 8: 'Autotune',
+        10: 'Auto', 11: 'RTL', 12: 'Loiter', 13: 'Takeoff', 14: 'Avoid_ADSB',
+        15: 'Guided', 17: 'QStabilize', 18: 'QHover', 19: 'QLoiter',
+        20: 'QLand', 21: 'QRTL', 22: 'QAutotune', 23: 'QAcro', 24: 'Thermal'
+      }
+    }
+    // Copter modes
+    if ([2, 3, 4, 13, 14, 15].includes(vehicleType)) {
+      return {
+        0: 'Stabilize', 1: 'Acro', 2: 'AltHold', 3: 'Auto', 4: 'Guided',
+        5: 'Loiter', 6: 'RTL', 7: 'Circle', 8: 'Position', 9: 'Land',
+        10: 'OF_Loiter', 11: 'Drift', 13: 'Sport', 14: 'Flip',
+        15: 'AutoTune', 16: 'PosHold', 17: 'Brake', 18: 'Throw',
+        19: 'Avoid_ADSB', 20: 'Guided_NoGPS', 21: 'Smart_RTL',
+        22: 'FlowHold', 23: 'Follow', 24: 'ZigZag', 25: 'SystemID',
+        26: 'Heli_Autorotate', 27: 'Auto_RTL'
+      }
+    }
+    // Rover modes
+    if (vehicleType === 10) {
+      return {
+        0: 'Manual', 1: 'Acro', 2: 'Learning', 3: 'Steering', 4: 'Hold',
+        5: 'Loiter', 6: 'Follow', 7: 'Simple', 10: 'Auto', 11: 'RTL',
+        12: 'SmartRTL', 15: 'Guided'
+      }
+    }
+    return {}
+  }
 
   const loadVehicles = async () => {
     try {
@@ -168,7 +221,35 @@ function MainContent() {
     }
   }
 
+  const loadMessages = async () => {
+    try {
+      const url = selectedVehicle 
+        ? `/api/mavlink/messages?systemId=${selectedVehicle}&limit=100`
+        : '/api/mavlink/messages?limit=100'
+      const response = await fetch(url)
+      const data = await response.json()
+      setMessages(data)
+    } catch (error) {
+      console.error('Error cargando mensajes:', error)
+    }
+  }
+
+  const clearMessages = async () => {
+    try {
+      const url = selectedVehicle 
+        ? `/api/mavlink/messages?systemId=${selectedVehicle}`
+        : '/api/mavlink/messages'
+      await fetch(url, { method: 'DELETE' })
+      setMessages([])
+    } catch (error) {
+      console.error('Error limpiando mensajes:', error)
+    }
+  }
+
   const handleMapContextMenu = (latlng, point) => {
+    // Ajustar offset si el sidebar izquierdo está abierto
+    const offsetX = leftSidebarOpen ? 350 : 0
+    
     // Si ya hay un menú abierto, primero lo cerramos
     if (contextMenu.show) {
       setContextMenu({ show: false, x: 0, y: 0, lat: 0, lng: 0 })
@@ -176,7 +257,7 @@ function MainContent() {
       setTimeout(() => {
         setContextMenu({
           show: true,
-          x: point.x + 15, // Offset a la derecha del punto
+          x: point.x + offsetX + 15, // Offset a la derecha del punto + sidebar
           y: point.y + 85, // Offset abajo del punto
           lat: latlng.lat,
           lng: latlng.lng
@@ -185,7 +266,7 @@ function MainContent() {
     } else {
       setContextMenu({
         show: true,
-        x: point.x + 15, // Offset a la derecha del punto
+        x: point.x + offsetX + 15, // Offset a la derecha del punto + sidebar
         y: point.y + 85, // Offset abajo del punto
         lat: latlng.lat,
         lng: latlng.lng
@@ -217,56 +298,50 @@ function MainContent() {
 
   // Funciones de control del vehículo
   const handleArmClick = () => {
-    setConfirmModal({
-      isOpen: true,
-      action: 'arm',
-      title: t('sidebar.actions.armConfirmTitle'),
-      message: t('sidebar.actions.armConfirmMessage')
-    })
+    if (onArmDisarmRequest && selectedVehicle) {
+      onArmDisarmRequest('arm', selectedVehicle)
+    }
   }
 
   const handleDisarmClick = () => {
-    setConfirmModal({
-      isOpen: true,
-      action: 'disarm',
-      title: t('sidebar.actions.disarmConfirmTitle'),
-      message: t('sidebar.actions.disarmConfirmMessage')
-    })
+    if (onArmDisarmRequest && selectedVehicle) {
+      onArmDisarmRequest('disarm', selectedVehicle)
+    }
   }
 
-  const executeAction = async () => {
-    const { action } = confirmModal
+  const handleFlightModeChange = async (customMode) => {
+    if (!selectedVehicle || actionLoading) return
+    
     setActionLoading(true)
-
     try {
-      const response = await fetch(`/api/mavlink/command/${action}`, {
+      const response = await fetch('/api/mavlink/flightmode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemId: selectedVehicle })
+        body: JSON.stringify({ 
+          systemId: selectedVehicle,
+          customMode: parseInt(customMode)
+        })
       })
       
       const result = await response.json()
-      
-      setConfirmModal({ isOpen: false, action: null })
       setActionLoading(false)
-
+      
       if (result.success) {
         setResultModal({
           isOpen: true,
-          title: t(`sidebar.actions.${action}Success`),
-          message: result.message || t(`sidebar.actions.${action}SuccessMessage`),
+          title: t('sidebar.actions.flightModeSuccess'),
+          message: result.message || t('sidebar.actions.flightModeSuccessMessage'),
           type: 'success'
         })
       } else {
         setResultModal({
           isOpen: true,
-          title: t(`sidebar.actions.${action}Error`),
-          message: result.message || t(`sidebar.actions.${action}ErrorMessage`),
+          title: t('sidebar.actions.flightModeError'),
+          message: result.message || t('sidebar.actions.flightModeErrorMessage'),
           type: 'error'
         })
       }
     } catch (error) {
-      setConfirmModal({ isOpen: false, action: null })
       setActionLoading(false)
       setResultModal({
         isOpen: true,
@@ -277,9 +352,79 @@ function MainContent() {
     }
   }
 
+  const getMessageIcon = (type) => {
+    const icons = {
+      critical: '🔴',
+      error: '❌',
+      warning: '⚠️',
+      notice: '📢',
+      info: 'ℹ️'
+    }
+    return icons[type] || 'ℹ️'
+  }
+
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diff = Math.floor((now - date) / 1000) // diferencia en segundos
+    
+    if (diff < 60) return t('sidebar.justNow')
+    if (diff < 3600) return `${Math.floor(diff / 60)}m`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+    
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div className="main-content">
-      {/* Sidebar colapsable */}
+      {/* Sidebar izquierdo */}
+      <div className={`map-sidebar-left ${leftSidebarOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-content">
+          <div className="sidebar-header">
+            <h3>{t('sidebar.messages')}</h3>
+            <button 
+              className="clear-messages-btn"
+              onClick={clearMessages}
+              title={t('sidebar.clearMessages')}
+            >
+              🗑️
+            </button>
+          </div>
+          <div className="sidebar-body messages-container">
+            {messages.length === 0 ? (
+              <div className="no-messages">
+                <div className="no-messages-icon">📭</div>
+                <p>{t('sidebar.noMessages')}</p>
+                <p className="no-messages-hint">{t('sidebar.noMessagesHint')}</p>
+              </div>
+            ) : (
+              <div className="messages-list">
+                {messages.map((msg, index) => (
+                  <div key={index} className={`message-item message-${msg.type}`}>
+                    <div className="message-header">
+                      <span className="message-icon">{getMessageIcon(msg.type)}</span>
+                      <span className="message-time">{formatMessageTime(msg.timestamp)}</span>
+                      <span className="message-system">#{msg.systemId}</span>
+                    </div>
+                    <div className="message-text">{msg.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Botón toggle del sidebar izquierdo */}
+      <button 
+        className={`sidebar-toggle-left ${leftSidebarOpen ? 'open' : 'closed'}`}
+        onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+        title={leftSidebarOpen ? 'Cerrar panel izquierdo' : 'Abrir panel izquierdo'}
+      >
+        {leftSidebarOpen ? '‹' : '›'}
+      </button>
+
+      {/* Sidebar derecho colapsable */}
       <div className={`map-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-content">
           <div className="sidebar-header">
@@ -328,48 +473,57 @@ function MainContent() {
                           {(() => {
                             const vehicle = vehicles.find(v => v.systemId === selectedVehicle)
                             return (
-                              <div className="info-grid">
-                                <div className="info-item">
-                                  <span className="info-label">System ID:</span>
-                                  <span className="info-value">#{vehicle.systemId}</span>
+                              <>
+                                <div className="info-grid">
+                                  <div className="info-item">
+                                    <span className="info-label">System ID:</span>
+                                    <span className="info-value">#{vehicle.systemId}</span>
+                                  </div>
+                                  {vehicle.lat && vehicle.lon && (
+                                    <div className="info-item full-width">
+                                      <span className="info-label">{t('sidebar.position')}:</span>
+                                      <span className="info-value">{vehicle.lat.toFixed(6)}, {vehicle.lon.toFixed(6)}</span>
+                                    </div>
+                                  )}
+                                  {vehicle.alt !== undefined && (
+                                    <div className="info-item">
+                                      <span className="info-label">{t('sidebar.altitude')}:</span>
+                                      <span className="info-value">{vehicle.alt.toFixed(1)} m</span>
+                                    </div>
+                                  )}
+                                  {vehicle.battery_remaining !== undefined && (
+                                    <div className="info-item">
+                                      <span className="info-label">{t('sidebar.battery')}:</span>
+                                      <span className="info-value">{vehicle.battery_remaining.toFixed(0)}%</span>
+                                    </div>
+                                  )}
+                                  {vehicle.gps_satellites !== undefined && (
+                                    <div className="info-item">
+                                      <span className="info-label">{t('sidebar.gpsSatellites')}:</span>
+                                      <span className="info-value">{vehicle.gps_satellites}</span>
+                                    </div>
+                                  )}
+                                  {vehicle.groundspeed !== undefined && (
+                                    <div className="info-item">
+                                      <span className="info-label">{t('sidebar.speed')}:</span>
+                                      <span className="info-value">{vehicle.groundspeed.toFixed(1)} m/s</span>
+                                    </div>
+                                  )}
+                                  {vehicle.heading !== undefined && (
+                                    <div className="info-item">
+                                      <span className="info-label">{t('sidebar.heading')}:</span>
+                                      <span className="info-value">{vehicle.heading.toFixed(0)}°</span>
+                                    </div>
+                                  )}
                                 </div>
-                                {vehicle.lat && vehicle.lon && (
-                                  <div className="info-item full-width">
-                                    <span className="info-label">{t('sidebar.position')}:</span>
-                                    <span className="info-value">{vehicle.lat.toFixed(6)}, {vehicle.lon.toFixed(6)}</span>
-                                  </div>
-                                )}
-                                {vehicle.alt !== undefined && (
-                                  <div className="info-item">
-                                    <span className="info-label">{t('sidebar.altitude')}:</span>
-                                    <span className="info-value">{vehicle.alt.toFixed(1)} m</span>
-                                  </div>
-                                )}
-                                {vehicle.battery_remaining !== undefined && (
-                                  <div className="info-item">
-                                    <span className="info-label">{t('sidebar.battery')}:</span>
-                                    <span className="info-value">{vehicle.battery_remaining.toFixed(0)}%</span>
-                                  </div>
-                                )}
-                                {vehicle.gps_satellites !== undefined && (
-                                  <div className="info-item">
-                                    <span className="info-label">{t('sidebar.gpsSatellites')}:</span>
-                                    <span className="info-value">{vehicle.gps_satellites}</span>
-                                  </div>
-                                )}
-                                {vehicle.groundspeed !== undefined && (
-                                  <div className="info-item">
-                                    <span className="info-label">{t('sidebar.speed')}:</span>
-                                    <span className="info-value">{vehicle.groundspeed.toFixed(1)} m/s</span>
-                                  </div>
-                                )}
-                                {vehicle.heading !== undefined && (
-                                  <div className="info-item">
-                                    <span className="info-label">{t('sidebar.heading')}:</span>
-                                    <span className="info-value">{vehicle.heading.toFixed(0)}°</span>
-                                  </div>
-                                )}
-                              </div>
+                                <button 
+                                  className="configure-vehicle-btn"
+                                  onClick={() => onVehicleConfigClick(vehicle.systemId)}
+                                >
+                                  <span className="btn-icon">⚙️</span>
+                                  <span className="btn-text">{t('sidebar.configureVehicle')}</span>
+                                </button>
+                              </>
                             )
                           })()}
                         </div>
@@ -390,15 +544,57 @@ function MainContent() {
                       </div>
                       {expandedCard === 'actions' && (
                         <div className="accordion-body">
+                          {/* Flight Mode Selector */}
+                          {(() => {
+                            const vehicle = vehicles.find(v => v.systemId === selectedVehicle)
+                            return (
+                              <div className="flight-mode-selector">
+                                <label className="flight-mode-label">
+                                  <span className="label-icon">✈️</span>
+                                  <span>{t('sidebar.flightMode')}</span>
+                                </label>
+                                <select
+                                  className="flight-mode-select"
+                                  value={vehicle?.custom_mode || 0}
+                                  onChange={(e) => handleFlightModeChange(e.target.value)}
+                                  disabled={actionLoading}
+                                >
+                                  {Object.entries(availableFlightModes).map(([value, name]) => (
+                                    <option key={value} value={value}>
+                                      {t(`flightModes.modes.${name}`, name)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )
+                          })()}
+                          
                           <div className="actions-grid">
-                            <button className="action-button arm" onClick={handleArmClick}>
-                              <span className="action-icon">🔓</span>
-                              <span className="action-text">{t('sidebar.actions.arm')}</span>
-                            </button>
-                            <button className="action-button disarm" onClick={handleDisarmClick}>
-                              <span className="action-icon">🔒</span>
-                              <span className="action-text">{t('sidebar.actions.disarm')}</span>
-                            </button>
+                            {(() => {
+                              const vehicle = vehicles.find(v => v.systemId === selectedVehicle)
+                              const isArmed = vehicle ? !!(vehicle.base_mode & 128) : false
+                              
+                              return (
+                                <>
+                                  <button 
+                                    className="action-button arm" 
+                                    onClick={handleArmClick}
+                                    disabled={isArmed}
+                                  >
+                                    <span className="action-icon">🔓</span>
+                                    <span className="action-text">{t('sidebar.actions.arm')}</span>
+                                  </button>
+                                  <button 
+                                    className="action-button disarm" 
+                                    onClick={handleDisarmClick}
+                                    disabled={!isArmed}
+                                  >
+                                    <span className="action-icon">🔒</span>
+                                    <span className="action-text">{t('sidebar.actions.disarm')}</span>
+                                  </button>
+                                </>
+                              )
+                            })()}
                             <button className="action-button takeoff">
                               <span className="action-icon">🛫</span>
                               <span className="action-text">{t('sidebar.actions.takeoff')}</span>
@@ -437,7 +633,7 @@ function MainContent() {
       </button>
 
       {/* Controles del mapa */}
-      <div className="map-controls">
+      <div className={`map-controls ${leftSidebarOpen ? 'shifted' : ''}`}>
         <button 
           className={`map-control-btn ${mapLayer === 'street' ? 'active' : ''}`}
           onClick={() => setMapLayer('street')}
@@ -555,17 +751,6 @@ function MainContent() {
           </div>
         </>
       )}
-
-      {/* Modal de confirmación */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        onClose={() => !actionLoading && setConfirmModal({ isOpen: false, action: null })}
-        onConfirm={executeAction}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        type="danger"
-        isLoading={actionLoading}
-      />
 
       {/* Modal de resultado */}
       <Modal

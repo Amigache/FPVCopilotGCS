@@ -17,7 +17,8 @@ const MAV_MSG = {
   PARAM_VALUE: 22,
   PARAM_REQUEST_LIST: 21,
   PARAM_REQUEST_READ: 20,
-  PARAM_SET: 23
+  PARAM_SET: 23,
+  STATUSTEXT: 253
 }
 
 // Tipos de vehículos MAVLink
@@ -60,6 +61,49 @@ class MAVLinkParser {
     payload.writeUInt8(targetComponent, 1)
     
     return this.buildMessage(21, payload)
+  }
+
+  // Construir mensaje PARAM_SET (msgid=23)
+  buildParamSet(paramName, paramValue, targetSystem = 1, targetComponent = 1) {
+    // PARAM_SET payload - ORDEN ORIGINAL que funcionaba con servos
+    // float param_value (4 bytes) - union, puede ser float o int32
+    // uint8_t target_system (1 byte)
+    // uint8_t target_component (1 byte)
+    // char[16] param_id (16 bytes)
+    // uint8_t param_type (1 byte)
+    
+    const payload = Buffer.alloc(23)
+    let offset = 0
+    
+    // IMPORTANTE: ArduPilot espera TODOS los parámetros como FLOAT (param_type=9)
+    // en PARAM_SET, incluso cuando son lógicamente enteros.
+    // Esto es consistente con el hecho de que PARAM_VALUE siempre envía FLOAT.
+    let paramType = 9 // MAV_PARAM_TYPE_REAL32 - SIEMPRE
+    
+    // ORDEN CORRECTO según repositorio oficial mavlink-arduino:
+    // Este es el orden EN MEMORIA de la struct, NO el orden de la documentación
+    
+    // 1. param_value (4 bytes, offset 0) - SIEMPRE como FLOAT
+    payload.writeFloatLE(paramValue, offset)
+    offset += 4
+    
+    // 2. target_system (1 byte, offset 4)
+    payload.writeUInt8(targetSystem, offset)
+    offset += 1
+    
+    // 3. target_component (1 byte, offset 5)
+    payload.writeUInt8(targetComponent, offset)
+    offset += 1
+    
+    // 4. param_id (16 bytes, offset 6-21)
+    const paramNameBuf = Buffer.from(paramName.substring(0, 16), 'ascii')
+    paramNameBuf.copy(payload, offset)
+    offset += 16
+    
+    // 5. param_type (1 byte, offset 22)
+    payload.writeUInt8(paramType, offset)
+    
+    return this.buildMessage(23, payload)
   }
 
   // Construir mensaje MAVLink v1
@@ -275,6 +319,10 @@ class MAVLinkParser {
           message.data = this.parseParamValue(payload)
           break
         
+        case MAV_MSG.STATUSTEXT:
+          message.data = this.parseStatusText(payload)
+          break
+        
         default:
           // Mensaje no soportado, solo devolvemos el ID
           message.data = { raw: payload }
@@ -417,17 +465,71 @@ class MAVLinkParser {
       if (char === 0) break
       paramId += String.fromCharCode(char)
     }
-
-    const result = {
-      param_value: payload.readFloatLE(0),
-      param_count: payload.readUInt16LE(4),
-      param_index: payload.readUInt16LE(6),
-      param_id: paramId
+    
+    // Leer param_type del mensaje (puede no ser confiable)
+    let paramType = 9 // MAV_PARAM_TYPE_REAL32 por defecto
+    if (payload.length >= 25) {
+      paramType = payload.readUInt8(24)
     }
     
-    // param_type es opcional (solo si hay 25 bytes)
-    if (payload.length >= 25) {
-      result.param_type = payload.readUInt8(24)
+    // IMPORTANTE: ArduPilot SIEMPRE envía los valores como FLOAT (4 bytes)
+    // Incluso los parámetros que son lógicamente enteros (SERIAL*_PROTOCOL, etc.)
+    // Debemos leer SIEMPRE como FLOAT primero
+    let paramValue = payload.readFloatLE(0)
+    
+    // Si el valor es un número entero (sin decimales), convertirlo a int
+    // Esto mantiene la consistencia con cómo ArduPilot maneja los parámetros
+    if (Number.isFinite(paramValue) && Math.floor(paramValue) === paramValue) {
+      paramValue = Math.round(paramValue)
+    }
+
+    const result = {
+      param_value: paramValue,
+      param_count: payload.readUInt16LE(4),
+      param_index: payload.readUInt16LE(6),
+      param_id: paramId,
+      param_type: paramType
+    }
+    
+    return result
+  }
+
+  // STATUSTEXT (msgid=253)
+  // Estructura MAVLink:
+  // uint8 severity (offset 0, 1 byte) - MAV_SEVERITY enum
+  // char[50] text (offset 1, 50 bytes) - Text message
+  // uint16 id (offset 51, 2 bytes) - Optional, MAVLink 2 only
+  // uint8 chunk_seq (offset 53, 1 byte) - Optional, MAVLink 2 only
+  // Nota: MAVLink v2 trunca los payloads, por lo que el tamaño real puede ser menor
+  parseStatusText(payload) {
+    if (payload.length < 2) {
+      console.log('⚠️  STATUSTEXT payload too short, expected at least 2 bytes')
+      return {}
+    }
+    
+    const severity = payload.readUInt8(0)
+    
+    // Extraer el texto del mensaje (el resto del payload o hasta 50 bytes)
+    const textLength = Math.min(payload.length - 1, 50)
+    let text = ''
+    for (let i = 1; i < 1 + textLength; i++) {
+      const char = payload.readUInt8(i)
+      if (char === 0) break
+      text += String.fromCharCode(char)
+    }
+    
+    const result = {
+      severity: severity,
+      text: text.trim()
+    }
+    
+    // Campos opcionales de MAVLink 2 (solo si el payload es suficientemente largo)
+    const textEndOffset = 51 // Offset donde termina el texto en la especificación
+    if (payload.length >= textEndOffset + 2) {
+      result.id = payload.readUInt16LE(textEndOffset)
+    }
+    if (payload.length >= textEndOffset + 3) {
+      result.chunk_seq = payload.readUInt8(textEndOffset + 2)
     }
     
     return result

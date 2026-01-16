@@ -97,6 +97,37 @@ app.post('/api/mavlink/command/:action', async (req, res) => {
   }
 });
 
+// Cambiar modo de vuelo
+app.post('/api/mavlink/flightmode', async (req, res) => {
+  const { systemId, customMode } = req.body;
+  
+  try {
+    const result = await mavlinkService.setFlightMode(systemId, customMode);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error cambiando modo de vuelo' 
+    });
+  }
+});
+
+// MAVLink Messages Routes
+app.get('/api/mavlink/messages', (req, res) => {
+  const { systemId, limit } = req.query;
+  const messages = mavlinkService.getMessages(
+    systemId ? parseInt(systemId) : null,
+    limit ? parseInt(limit) : 50
+  );
+  res.json(messages);
+});
+
+app.delete('/api/mavlink/messages', (req, res) => {
+  const { systemId } = req.query;
+  mavlinkService.clearMessages(systemId ? parseInt(systemId) : null);
+  res.json({ success: true, message: 'Mensajes eliminados' });
+});
+
 // Serve static files from React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));

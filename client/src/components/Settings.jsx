@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import './Settings.css'
 import General from './settings/General'
 import Connections from './settings/Connections'
-import Parameters from './settings/Parameters'
 import AboutUs from './settings/AboutUs'
 
 function Settings() {
@@ -13,7 +12,6 @@ function Settings() {
   const menuItems = [
     { id: 'general', label: t('settings.general'), icon: '🌐' },
     { id: 'connections', label: t('settings.connections'), icon: '🔌' },
-    { id: 'parameters', label: t('settings.parameters'), icon: '⚙️' },
     { id: 'about', label: t('settings.about'), icon: 'ℹ️' }
   ]
 
@@ -23,8 +21,6 @@ function Settings() {
         return <General />
       case 'connections':
         return <Connections />
-      case 'parameters':
-        return <Parameters />
       case 'about':
         return <AboutUs />
       default:
