@@ -378,6 +378,8 @@ class MAVLinkParser {
       lat: payload.readInt32LE(8) / 1e7, // grados
       lon: payload.readInt32LE(12) / 1e7, // grados
       alt: payload.readInt32LE(16) / 1000.0, // mm a m
+      eph: payload.readUInt16LE(20), // HDOP en centímetros
+      epv: payload.readUInt16LE(22), // VDOP en centímetros
       satellites_visible: payload.readUInt8(29)
     }
   }

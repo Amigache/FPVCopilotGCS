@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import TopBar from './components/TopBar'
+import BottomBar from './components/BottomBar'
 import MainContent from './components/MainContent'
 import Settings from './components/Settings'
 import VehicleConfig from './components/VehicleConfig'
@@ -96,8 +97,7 @@ function AppContent() {
         isSettingsOpen={currentView === 'settings'}
         onArmDisarmRequest={handleArmDisarmRequest}
       />
-      {renderView()}
-      
+      {renderView()}      <BottomBar />      
       {/* Toast notifications */}
       <ToastContainer />
       

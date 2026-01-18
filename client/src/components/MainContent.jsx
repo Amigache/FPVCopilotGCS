@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import { useTranslation } from 'react-i18next'
 import 'leaflet/dist/leaflet.css'
 import './MainContent.css'
@@ -65,10 +65,6 @@ const createVehicleIcon = (systemId, connected, heading = 0) => {
                 stroke="white" 
                 stroke-width="2.5" 
                 filter="url(#shadow)"/>
-          <circle cx="25" cy="25" r="5" fill="white" opacity="0.9"/>
-          <text x="25" y="27" text-anchor="middle" 
-                font-size="12" font-weight="bold" 
-                fill="#000" opacity="0.8">${systemId}</text>
         </svg>
       </div>
     `,
@@ -99,6 +95,28 @@ function MapController({ vehicles, followVehicle }) {
       }
     }
   }, [vehicles, followVehicle, map])
+  
+  return null
+}
+
+// Componente para rastrear el zoom del mapa
+function ZoomTracker({ onZoomChange }) {
+  const map = useMap()
+  
+  useEffect(() => {
+    const handleZoomEnd = () => {
+      onZoomChange(map.getZoom())
+    }
+    
+    // Establecer zoom inicial
+    onZoomChange(map.getZoom())
+    
+    map.on('zoomend', handleZoomEnd)
+    
+    return () => {
+      map.off('zoomend', handleZoomEnd)
+    }
+  }, [map, onZoomChange])
   
   return null
 }
@@ -144,10 +162,61 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false)
   const [expandedCard, setExpandedCard] = useState('info') // 'info' o 'actions'
   const [actionLoading, setActionLoading] = useState(false)
-  const [mapLayer, setMapLayer] = useState('street') // 'street' o 'satellite'
+  const [mapLayer, setMapLayer] = useState('satellite') // 'street' o 'satellite'
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, coords: null })
   const [availableFlightModes, setAvailableFlightModes] = useState({})
   const [followVehicle, setFollowVehicle] = useState(true) // Seguimiento automático del vehículo
+  const [currentZoom, setCurrentZoom] = useState(15)
+  const [vehicleTrack, setVehicleTrack] = useState([]) // Track del vehículo activo (hasta 30 posiciones)
+  const [lastTrackedVehicle, setLastTrackedVehicle] = useState(null) // Para detectar cambio de vehículo
+  
+  // Guardar el zoom actual en localStorage para compartirlo con BottomBar
+  useEffect(() => {
+    localStorage.setItem('map_zoom', currentZoom.toString())
+    window.dispatchEvent(new Event('mapZoomChanged'))
+  }, [currentZoom])
+  
+  // Actualizar track del vehículo activo
+  useEffect(() => {
+    // Si cambió el vehículo seleccionado, limpiar el track
+    if (selectedVehicle !== lastTrackedVehicle) {
+      setVehicleTrack([])
+      setLastTrackedVehicle(selectedVehicle)
+      return
+    }
+    
+    // Si hay vehículo seleccionado, actualizar su track
+    if (selectedVehicle) {
+      const vehicle = vehicles.find(v => v.systemId === selectedVehicle)
+      if (vehicle && vehicle.lat != null && vehicle.lon != null && 
+          !isNaN(vehicle.lat) && !isNaN(vehicle.lon)) {
+        
+        setVehicleTrack(prevTrack => {
+          const newPosition = [vehicle.lat, vehicle.lon]
+          
+          // Verificar si la posición es diferente a la última
+          if (prevTrack.length > 0) {
+            const lastPos = prevTrack[prevTrack.length - 1]
+            const distance = Math.sqrt(
+              Math.pow(newPosition[0] - lastPos[0], 2) + 
+              Math.pow(newPosition[1] - lastPos[1], 2)
+            )
+            // Solo añadir si se movió más de ~1 metro (aproximadamente 0.00001 grados)
+            if (distance < 0.00001) {
+              return prevTrack
+            }
+          }
+          
+          // Añadir nueva posición y mantener solo las últimas 30
+          const updatedTrack = [...prevTrack, newPosition]
+          if (updatedTrack.length > 30) {
+            return updatedTrack.slice(-30) // Mantener solo las últimas 30
+          }
+          return updatedTrack
+        })
+      }
+    }
+  }, [vehicles, selectedVehicle, lastTrackedVehicle])
   // SITL Ardupilot por defecto: Canberra, Australia
   const defaultPosition = [-35.363261, 149.165230]
 
@@ -605,7 +674,7 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
 
       <MapContainer 
         center={defaultPosition} 
-        zoom={13} 
+        zoom={15} 
         className="map-container"
         zoomControl={true}
       >
@@ -624,6 +693,21 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
         
         {vehicles.length > 0 && <MapController vehicles={vehicles} followVehicle={followVehicle} />}
         <MapEventHandler onContextMenu={handleMapContextMenu} />
+        <ZoomTracker onZoomChange={setCurrentZoom} />
+        
+        {/* Track del vehículo activo */}
+        {vehicleTrack.length > 1 && (
+          <Polyline 
+            positions={vehicleTrack}
+            pathOptions={{
+              color: '#2196f3',
+              weight: 3,
+              opacity: 0.8,
+              lineCap: 'round',
+              lineJoin: 'round'
+            }}
+          />
+        )}
         
         {vehicles.filter(v => v.lat != null && v.lon != null).map((vehicle) => (
           <Marker 

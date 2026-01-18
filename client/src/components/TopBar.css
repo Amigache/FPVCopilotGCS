@@ -165,9 +165,20 @@
   transition: all 0.2s ease;
 }
 
+.connect-button.disconnected {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+}
+
 .connect-button:hover:not(:disabled) {
   background: rgba(76, 175, 80, 0.3);
   border-color: #4caf50;
+  transform: scale(1.1);
+}
+
+.connect-button.disconnected:hover:not(:disabled) {
+  background: rgba(244, 67, 54, 0.3);
+  border-color: #f44336;
   transform: scale(1.1);
 }
 

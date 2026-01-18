@@ -29,7 +29,7 @@
     "autoConnect": "Auto-conectar con conexiones disponibles",
     "armed": "Armado",
     "disarmed": "Desarmado",
-    "flightMode": "Modo de Vuelo",
+    "flightMode": "Modo",
     "signalQuality": {
       "noSignal": "Sin señal",
       "excellent": "Excelente",
@@ -106,6 +106,7 @@
       "namePlaceholder": "Mi Conexión",
       "type": "Tipo de Conexión",
       "serialPort": "Puerto Serial",
+      "selectSerialPort": "Seleccionar puerto del navegador",
       "baudrate": "Baudrate",
       "mode": "Modo",
       "client": "Cliente",
@@ -133,7 +134,10 @@
       "nameRequired": "Por favor ingresa un nombre para la conexión",
       "disconnected": "Desconectado",
       "disconnectedSuccess": "La conexión se ha cerrado correctamente",
-      "disconnectError": "No se pudo desconectar"
+      "disconnectError": "No se pudo desconectar",
+      "webSerialNotSupported": "Tu navegador no soporta Web Serial API. Usa Chrome, Edge o un navegador compatible.",
+      "serialPortSelected": "Puerto serial seleccionado exitosamente",
+      "serialPortError": "Error al seleccionar el puerto serial"
     }
   },
   "parameters": {
@@ -267,6 +271,14 @@
     "info1": "Los cambios en las funciones de servo se aplican inmediatamente y pueden afectar el comportamiento del vehículo",
     "info2": "Asegúrate de que los motores estén desarmados antes de cambiar las salidas de motores",
     "info3": "Algunas funciones pueden requerir hardware específico o configuración adicional",
+    "function": "Función",
+    "reversed": "Invertido",
+    "normal": "Normal",
+    "reverse": "Invertir",
+    "min": "Mínimo",
+    "max": "Máximo",
+    "trim": "Centrado",
+    "current": "Actual",
     "functions": {
       "Disabled": "Deshabilitado",
       "RCPassThru": "RC PassThru",

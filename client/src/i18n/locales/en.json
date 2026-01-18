@@ -29,7 +29,7 @@
     "autoConnect": "Auto-connect with available connections",
     "armed": "Armed",
     "disarmed": "Disarmed",
-    "flightMode": "Flight Mode",
+    "flightMode": "Mode",
     "signalQuality": {
       "noSignal": "No signal",
       "excellent": "Excellent",
@@ -106,6 +106,7 @@
       "namePlaceholder": "My Connection",
       "type": "Connection Type",
       "serialPort": "Serial Port",
+      "selectSerialPort": "Select port from browser",
       "baudrate": "Baudrate",
       "mode": "Mode",
       "client": "Client",
@@ -133,7 +134,10 @@
       "nameRequired": "Please enter a name for the connection",
       "disconnected": "Disconnected",
       "disconnectedSuccess": "The connection has been closed successfully",
-      "disconnectError": "Could not disconnect"
+      "disconnectError": "Could not disconnect",
+      "webSerialNotSupported": "Your browser does not support Web Serial API. Use Chrome, Edge or a compatible browser.",
+      "serialPortSelected": "Serial port selected successfully",
+      "serialPortError": "Error selecting serial port"
     }
   },
   "parameters": {
@@ -269,6 +273,14 @@
     "info1": "Changes to servo functions are applied immediately and may affect vehicle behavior",
     "info2": "Make sure motors are disarmed before changing motor outputs",
     "info3": "Some functions may require specific hardware or additional configuration",
+    "function": "Function",
+    "reversed": "Reversed",
+    "normal": "Normal",
+    "reverse": "Reverse",
+    "min": "Min",
+    "max": "Max",
+    "trim": "Trim",
+    "current": "Current",
     "functions": {
       "Disabled": "Disabled",
       "RCPassThru": "RC PassThru",

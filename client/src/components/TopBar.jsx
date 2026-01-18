@@ -11,7 +11,8 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     selectedVehicleId, 
     setSelectedVehicleId, 
     vehicles, 
-    connectionStatus 
+    connectionStatus,
+    markManualDisconnect
   } = useWebSocketContext()
   
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('es-ES', { 
@@ -132,6 +133,22 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     }
   }, [selectedVehicle])
 
+  // Autoconexión al iniciar la aplicación
+  useEffect(() => {
+    // Solo autoconectar si no está conectado y hay conexiones guardadas
+    const savedConnections = localStorage.getItem('mavlink_connections')
+    const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
+    
+    if (!isConnected && savedConnections && savedActiveConnection) {
+      // Pequeño delay para asegurar que el WebSocket está listo
+      const timer = setTimeout(() => {
+        handleAutoConnect()
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, []) // Solo ejecutar al montar el componente
+
   // Calcular valores derivados de telemetría desde el vehículo seleccionado
   const getSignalQuality = () => {
     if (!selectedVehicle) return t('topbar.signalQuality.noSignal')
@@ -173,6 +190,29 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const getFlightMode = () => {
     if (!isConnected || !selectedVehicle) return 'Unknown'
     return selectedVehicle.flightMode || 'Unknown'
+  }
+
+  // Función para obtener el emoji del vehículo según su tipo
+  const getVehicleIcon = () => {
+    if (!selectedVehicle) return '🚁'
+    
+    const vehicleType = selectedVehicle.vehicleType || selectedVehicle.type
+    
+    switch(vehicleType) {
+      case 1: // Fixed wing
+        return '✈️'
+      case 4: // Helicopter
+      case 3: // Coaxial helicopter
+        return '🚁'
+      case 10: // Ground rover
+        return '🚗'
+      case 2: // Quadrotor
+      case 13: // Hexarotor
+      case 14: // Octorotor
+      case 15: // Tricopter
+      default: // Multirotor/Copter
+        return '🚁'
+    }
   }
 
   // Función para auto-conectar con la primera conexión válida
@@ -245,13 +285,31 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     }
   }
 
+  // Función para desconectar
+  const handleDisconnect = async () => {
+    try {
+      // Marcar como desconexión manual para detener auto-reconnect
+      markManualDisconnect()
+      
+      const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
+      const result = await response.json()
+      
+      if (result.success) {
+        localStorage.removeItem('mavlink_active_connection')
+        console.log('Desconectado exitosamente')
+      }
+    } catch (error) {
+      console.error('Error desconectando:', error)
+    }
+  }
+
   return (
     <>
       <div className="top-bar">
         <div className="top-bar-left">
           {/* Vehículo seleccionado */}
           <div className="indicator">
-          <span className="indicator-icon">🚁</span>
+          <span className="indicator-icon">{getVehicleIcon()}</span>
           <span className="indicator-label">{t('topbar.vehicle')}</span>
           <span className="indicator-value">{selectedVehicle ? `#${selectedVehicleId}` : 'N/A'}</span>
         </div>
@@ -310,7 +368,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
                    setShowFlightModeDropdown(!showFlightModeDropdown)
                    setShowArmDropdown(false)
                  }}>
-              <span className="indicator-icon">✈️</span>
+              <span className="indicator-icon">⚙️</span>
               <span className="indicator-label">{t('topbar.flightMode')}</span>
               <span className="indicator-value">{getFlightMode()}</span>
             </div>
@@ -347,34 +405,17 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           <span className="indicator-label">{t('topbar.battery')}</span>
           <span className="indicator-value">{getBatteryStatus()}</span>
         </div>
-        
-        {/* GPS */}
-        <div className="indicator">
-          <span className="indicator-icon">📍</span>
-          <span className="indicator-label">{t('topbar.gps')}</span>
-          <span className="indicator-value">{getGPSStatus()}</span>
-        </div>
-        
-        {/* Telemetría */}
-        <div className={`indicator ${hasTelemetry ? 'telemetry-active' : 'telemetry-inactive'}`}>
-          <span className="indicator-icon">{hasTelemetry ? '✓' : '✗'}</span>
-          <span className="indicator-label">{t('topbar.telemetry')}</span>
-          <span className="indicator-value">{hasTelemetry ? t('topbar.active') : t('topbar.inactive')}</span>
-        </div>
       </div>
       
       <div className="top-bar-right">
-        {!isConnected && (
-          <button 
-            className="connect-button"
-            onClick={handleAutoConnect}
-            disabled={connecting}
-            title={t('topbar.autoConnect')}
-          >
-            {connecting ? '⏳' : '🔌'}
-          </button>
-        )}
-        <div className="time">{currentTime}</div>
+        <button 
+          className={`connect-button ${isConnected ? 'disconnected' : ''}`}
+          onClick={isConnected ? handleDisconnect : handleAutoConnect}
+          disabled={connecting}
+          title={isConnected ? 'Desconectar' : t('topbar.autoConnect')}
+        >
+          {connecting ? '⏳' : (isConnected ? '🔌' : '🔌')}
+        </button>
         <button 
           className={`settings-button ${isSettingsOpen ? 'active' : ''}`}
           onClick={onSettingsClick}

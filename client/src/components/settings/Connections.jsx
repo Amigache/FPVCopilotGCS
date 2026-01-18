@@ -263,18 +263,28 @@ function Connections() {
           <>
             <div className="form-group">
               <label className="form-label">{t('connections.form.serialPort')}</label>
-              <select 
-                className="form-input"
-                value={newConnection.config.port || '/dev/ttyUSB0'}
-                onChange={(e) => setNewConnection({
-                  ...newConnection,
-                  config: { ...newConnection.config, port: e.target.value }
-                })}
-              >
-                <option>/dev/ttyUSB0</option>
-                <option>/dev/ttyUSB1</option>
-                <option>/dev/ttyAMA0</option>
-              </select>
+              <div className="serial-port-selector">
+                <select 
+                  className="form-input"
+                  value={newConnection.config.port || '/dev/ttyUSB0'}
+                  onChange={(e) => setNewConnection({
+                    ...newConnection,
+                    config: { ...newConnection.config, port: e.target.value }
+                  })}
+                >
+                  <option>/dev/ttyUSB0</option>
+                  <option>/dev/ttyUSB1</option>
+                  <option>/dev/ttyAMA0</option>
+                </select>
+                <button 
+                  type="button"
+                  className="btn-select-port"
+                  onClick={handleSelectSerialPort}
+                  title={t('connections.form.selectSerialPort')}
+                >
+                  🔍
+                </button>
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">{t('connections.form.baudrate')}</label>
@@ -398,6 +408,48 @@ function Connections() {
       case 'tcp': return '🌐'
       case 'udp': return '📡'
       default: return '⚙️'
+    }
+  }
+
+  const handleSelectSerialPort = async () => {
+    try {
+      // Verificar si el navegador soporta Web Serial API
+      if (!('serial' in navigator)) {
+        notify.error(t('connections.messages.webSerialNotSupported'))
+        return
+      }
+
+      // Solicitar al usuario que seleccione un puerto serial
+      const port = await navigator.serial.requestPort()
+      
+      // Obtener información del puerto
+      const info = port.getInfo()
+      
+      // Crear un nombre descriptivo para el puerto
+      let portName = 'Web Serial'
+      if (info.usbVendorId && info.usbProductId) {
+        portName = `USB (VID: ${info.usbVendorId.toString(16)}, PID: ${info.usbProductId.toString(16)})`
+      }
+      
+      // Actualizar el campo de puerto con el nombre
+      setNewConnection({
+        ...newConnection,
+        config: { 
+          ...newConnection.config, 
+          port: portName,
+          webSerialPort: true // Marcar que es un puerto Web Serial
+        }
+      })
+      
+      notify.success(t('connections.messages.serialPortSelected'))
+    } catch (error) {
+      if (error.name === 'NotFoundError') {
+        // El usuario canceló la selección
+        console.log('Selección de puerto cancelada')
+      } else {
+        console.error('Error seleccionando puerto serial:', error)
+        notify.error(t('connections.messages.serialPortError'))
+      }
     }
   }
 

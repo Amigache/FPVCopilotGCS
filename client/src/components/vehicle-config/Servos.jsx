@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNotification } from '../../contexts/NotificationContext'
+import { useWebSocketContext } from '../../contexts/WebSocketContext'
 import useVehicleConfigSection from '../../hooks/useVehicleConfigSection'
 import './common.css'
 import './Servos.css'
@@ -14,6 +15,7 @@ const SERVO_FUNCTIONS = {
   6: 'Elevator',
   19: 'RudderWithInput',
   21: 'GroundSteering',
+  26: 'Rudder',
   33: 'Motor1',
   34: 'Motor2',
   35: 'Motor3',
@@ -38,9 +40,9 @@ const SERVO_FUNCTIONS = {
   64: 'RCIN14',
   65: 'RCIN15',
   66: 'RCIN16',
-  73: 'Throttle',
-  74: 'ThrottleLeft',
-  75: 'ThrottleRight',
+  70: 'Throttle',
+  73: 'ThrottleLeft',
+  74: 'ThrottleRight',
   86: 'MotorTilt',
   89: 'CameraISO',
   90: 'CameraAperture',
@@ -69,45 +71,46 @@ const SERVO_FUNCTIONS = {
 const Servos = forwardRef(({ systemId, vehicle }, ref) => {
   const { t } = useTranslation()
   const notify = useNotification()
-  const [servoOutputs, setServoOutputs] = useState({})
-  const [modifiedOutputs, setModifiedOutputs] = useState({})
-  const NUM_OUTPUTS = 16
+  const { vehicles } = useWebSocketContext()
+  const [servoData, setServoData] = useState({})
+  const [modifiedParams, setModifiedParams] = useState({})
+  const [expandedServo, setExpandedServo] = useState(null)
+  const NUM_SERVOS = 16
 
   // Función para cargar datos desde el Map de parámetros
   const loadDataFn = useCallback(async (paramsMap) => {
-    const servoParams = {}
-    for (let i = 1; i <= NUM_OUTPUTS; i++) {
-      const paramName = `SERVO${i}_FUNCTION`
-      const param = paramsMap.get(paramName)
-      if (param && param.value !== undefined && param.value !== null) {
-        servoParams[i] = parseInt(param.value)
+    const servos = {}
+    
+    for (let i = 1; i <= NUM_SERVOS; i++) {
+      const functionParam = paramsMap.get(`SERVO${i}_FUNCTION`)
+      const minParam = paramsMap.get(`SERVO${i}_MIN`)
+      const maxParam = paramsMap.get(`SERVO${i}_MAX`)
+      const trimParam = paramsMap.get(`SERVO${i}_TRIM`)
+      const reversedParam = paramsMap.get(`SERVO${i}_REVERSED`)
+      
+      servos[i] = {
+        function: functionParam ? parseInt(functionParam.value) : 0,
+        min: minParam ? parseInt(minParam.value) : 1100,
+        max: maxParam ? parseInt(maxParam.value) : 1900,
+        trim: trimParam ? parseInt(trimParam.value) : 1500,
+        reversed: reversedParam ? parseInt(reversedParam.value) : 0,
+        currentValue: 0 // Se actualizará desde telemetría
       }
     }
     
-    setServoOutputs(servoParams)
-    setModifiedOutputs({})
-    return { originalValues: servoParams }
-  }, [NUM_OUTPUTS])
+    setServoData(servos)
+    setModifiedParams({})
+    return { originalValues: servos }
+  }, [NUM_SERVOS])
 
   // Función para obtener parámetros modificados
   const getChangedParams = useCallback(() => {
-    const paramsToUpdate = []
-    
-    for (const [output, value] of Object.entries(servoOutputs)) {
-      if (value !== configSection.originalValues[output]) {
-        paramsToUpdate.push({
-          name: `SERVO${output}_FUNCTION`,
-          value: parseInt(value)
-        })
-      }
-    }
-    
-    return paramsToUpdate
-  }, [servoOutputs])
+    return Object.values(modifiedParams)
+  }, [modifiedParams])
 
   // Callback después de guardar
   const onSaveSuccess = useCallback(() => {
-    setModifiedOutputs({})
+    setModifiedParams({})
   }, [])
 
   // Hook de configuración
@@ -125,7 +128,8 @@ const Servos = forwardRef(({ systemId, vehicle }, ref) => {
     hasUnsavedChanges: configSection.hasUnsavedChanges,
     saveChanges: () => configSection.saveChanges(),
     resetChanges: () => {
-      setServoOutputs({ ...configSection.originalValues })
+      setServoData({ ...configSection.originalValues })
+      setModifiedParams({})
       configSection.resetChanges()
     }
   }))
@@ -134,31 +138,40 @@ const Servos = forwardRef(({ systemId, vehicle }, ref) => {
     configSection.loadData()
   }, [])
 
-  const handleServoFunctionChange = (outputNum, newValue) => {
-    const newValueInt = parseInt(newValue)
-    const originalValue = configSection.originalValues[outputNum] || 0
+  const handleParamChange = (servoNum, paramName, value) => {
+    const fullParamName = `SERVO${servoNum}_${paramName.toUpperCase()}`
+    const originalServo = configSection.originalValues[servoNum]
+    const newValue = parseInt(value)
     
     // Actualizar estado local
-    setServoOutputs(prev => ({
+    setServoData(prev => ({
       ...prev,
-      [outputNum]: newValueInt
+      [servoNum]: {
+        ...prev[servoNum],
+        [paramName]: newValue
+      }
     }))
 
-    // Trackear si ha sido modificado
-    if (newValueInt !== originalValue) {
-      setModifiedOutputs(prev => ({
+    // Verificar si es diferente del original
+    const isModified = originalServo && originalServo[paramName] !== newValue
+    
+    if (isModified) {
+      setModifiedParams(prev => ({
         ...prev,
-        [outputNum]: newValueInt
+        [fullParamName]: {
+          name: fullParamName,
+          value: newValue
+        }
       }))
       configSection.markAsModified()
     } else {
       // Si vuelve al valor original, quitar de modificados
-      setModifiedOutputs(prev => {
+      setModifiedParams(prev => {
         const newModified = { ...prev }
-        delete newModified[outputNum]
+        delete newModified[fullParamName]
         return newModified
       })
-      if (Object.keys({ ...modifiedOutputs, [outputNum]: undefined }).filter(k => modifiedOutputs[k] !== undefined).length === 0) {
+      if (Object.keys(modifiedParams).length <= 1) {
         configSection.markAsModified(false)
       }
     }
@@ -170,6 +183,10 @@ const Servos = forwardRef(({ systemId, vehicle }, ref) => {
       return t(`servos.functions.${functionName}`, functionName)
     }
     return t('servos.functions.Unknown', `Unknown (${value})`)
+  }
+
+  const isServoModified = (servoNum) => {
+    return Object.keys(modifiedParams).some(key => key.startsWith(`SERVO${servoNum}_`))
   }
 
   if (configSection.loading) {
@@ -193,51 +210,116 @@ const Servos = forwardRef(({ systemId, vehicle }, ref) => {
         <div className="header-right">
           <button 
             onClick={() => configSection.saveChanges()}
-            disabled={Object.keys(modifiedOutputs).length === 0 || configSection.saving}
-            className={`save-button ${Object.keys(modifiedOutputs).length > 0 ? 'modified' : ''}`}
+            disabled={Object.keys(modifiedParams).length === 0 || configSection.saving}
+            className={`save-button ${Object.keys(modifiedParams).length > 0 ? 'modified' : ''}`}
           >
             {configSection.saving ? t('servos.saving') : 
-             Object.keys(modifiedOutputs).length > 0 ? `${t('servos.saveChanges')} (${Object.keys(modifiedOutputs).length})` : 
+             Object.keys(modifiedParams).length > 0 ? `${t('servos.saveChanges')} (${Object.keys(modifiedParams).length})` : 
              t('servos.noChanges')}
           </button>
         </div>
       </div>
 
-      {configSection.loading ? (
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>{t('servos.loading')}</p>
-        </div>
-      ) : (
-        <div className="frame-outputs-grid">
-          {Array.from({ length: NUM_OUTPUTS }, (_, i) => i + 1).map(outputNum => {
-            const currentValue = servoOutputs[outputNum] || 0
-
-            const isModified = modifiedOutputs.hasOwnProperty(outputNum)
-            
-            return (
-              <div key={outputNum} className="output-item">
-                <label className="output-label">
-                  {t('servos.output')} {outputNum}
-                  {isModified && <span className="modified-indicator">*</span>}
-                </label>
-                <select
-                  className={`output-select ${isModified ? 'modified' : ''}`}
-                  value={currentValue}
-                  onChange={(e) => handleServoFunctionChange(outputNum, e.target.value)}
-                  disabled={configSection.saving}
-                >
-                  {Object.entries(SERVO_FUNCTIONS).map(([value, name]) => (
-                    <option key={value} value={value}>
-                      {t(`servos.functions.${name}`, name)}
-                    </option>
-                  ))}
-                </select>
+      <div className="servos-list">
+        {Array.from({ length: NUM_SERVOS }, (_, i) => i + 1).map(servoNum => {
+          const servo = servoData[servoNum] || {}
+          const isModified = isServoModified(servoNum)
+          const isExpanded = expandedServo === servoNum
+          const functionName = getFunctionName(servo.function)
+          
+          return (
+            <div key={servoNum} className={`servo-card ${isModified ? 'modified' : ''}`}>
+              <div 
+                className="servo-header"
+                onClick={() => setExpandedServo(isExpanded ? null : servoNum)}
+              >
+                <div className="servo-header-left">
+                  <span className="servo-number">Servo {servoNum}</span>
+                  <span className="servo-function">{functionName}</span>
+                </div>
+                <div className="servo-header-right">
+                  {isModified && <span className="modified-badge">*</span>}
+                  <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+
+              {isExpanded && (
+                <div className="servo-details">
+                  <div className="servo-row">
+                    <label className="servo-label">{t('servos.function')}</label>
+                    <select
+                      className="servo-select"
+                      value={servo.function}
+                      onChange={(e) => handleParamChange(servoNum, 'function', e.target.value)}
+                      disabled={configSection.saving}
+                    >
+                      {Object.entries(SERVO_FUNCTIONS).map(([value, name]) => (
+                        <option key={value} value={value}>
+                          {t(`servos.functions.${name}`, name)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="servo-row">
+                    <label className="servo-label">{t('servos.reversed')}</label>
+                    <input
+                      type="checkbox"
+                      className="servo-checkbox"
+                      checked={servo.reversed === 1}
+                      onChange={(e) => handleParamChange(servoNum, 'reversed', e.target.checked ? 1 : 0)}
+                      disabled={configSection.saving}
+                    />
+                    <span className="servo-unit"></span>
+                  </div>
+
+                  <div className="servo-row">
+                    <label className="servo-label">{t('servos.min')}</label>
+                    <input
+                      type="number"
+                      className="servo-input"
+                      value={servo.min}
+                      onChange={(e) => handleParamChange(servoNum, 'min', e.target.value)}
+                      disabled={configSection.saving}
+                      min="800"
+                      max="2200"
+                    />
+                    <span className="servo-unit">μs</span>
+                  </div>
+
+                  <div className="servo-row">
+                    <label className="servo-label">{t('servos.trim')}</label>
+                    <input
+                      type="number"
+                      className="servo-input"
+                      value={servo.trim}
+                      onChange={(e) => handleParamChange(servoNum, 'trim', e.target.value)}
+                      disabled={configSection.saving}
+                      min="800"
+                      max="2200"
+                    />
+                    <span className="servo-unit">μs</span>
+                  </div>
+
+                  <div className="servo-row">
+                    <label className="servo-label">{t('servos.max')}</label>
+                    <input
+                      type="number"
+                      className="servo-input"
+                      value={servo.max}
+                      onChange={(e) => handleParamChange(servoNum, 'max', e.target.value)}
+                      disabled={configSection.saving}
+                      min="800"
+                      max="2200"
+                    />
+                    <span className="servo-unit">μs</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 })
