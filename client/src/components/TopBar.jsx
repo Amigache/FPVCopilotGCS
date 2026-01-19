@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
+import { useNotification } from '../contexts/NotificationContext'
 import ParameterDownloadModal from './ParameterDownloadModal'
 import './TopBar.css'
 
 function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
+  const notify = useNotification()
   const { 
     selectedVehicle, 
     selectedVehicleId, 
@@ -225,6 +227,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
       const savedConnections = localStorage.getItem('mavlink_connections')
       if (!savedConnections) {
         console.log('No hay conexiones guardadas')
+        notify.error(t('topbar.connectionError.noSavedConnections'))
         setConnecting(false)
         return
       }
@@ -232,6 +235,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
       const connections = JSON.parse(savedConnections)
       if (connections.length === 0) {
         console.log('Lista de conexiones vacía')
+        notify.error(t('topbar.connectionError.noSavedConnections'))
         setConnecting(false)
         return
       }
@@ -278,9 +282,12 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         }
       }
       
+      // Si llegamos aquí, no hubo conexión exitosa
+      notify.error(t('topbar.connectionError.connectionFailed'))
       setConnecting(false)
     } catch (error) {
       console.error('Error en auto-connect:', error)
+      notify.error(t('topbar.connectionError.connectionFailed'))
       setConnecting(false)
     }
   }
@@ -308,11 +315,13 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
       <div className="top-bar">
         <div className="top-bar-left">
           {/* Vehículo seleccionado */}
-          <div className="indicator">
-          <span className="indicator-icon">{getVehicleIcon()}</span>
-          <span className="indicator-label">{t('topbar.vehicle')}</span>
-          <span className="indicator-value">{selectedVehicle ? `#${selectedVehicleId}` : 'N/A'}</span>
-        </div>
+          {hasTelemetry && (
+            <div className="indicator">
+              <span className="indicator-icon">{getVehicleIcon()}</span>
+              <span className="indicator-label">{t('topbar.vehicle')}</span>
+              <span className="indicator-value">{selectedVehicle ? `#${selectedVehicleId}` : 'N/A'}</span>
+            </div>
+          )}
         
         {/* Estado Armado/Desarmado */}
         {hasTelemetry && (
@@ -393,18 +402,22 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         )}
         
         {/* Señal */}
-        <div className="indicator">
-          <span className="indicator-icon">📡</span>
-          <span className="indicator-label">{t('topbar.signal')}</span>
-          <span className="indicator-value">{getSignalQuality()}</span>
-        </div>
+        {hasTelemetry && (
+          <div className="indicator">
+            <span className="indicator-icon">📡</span>
+            <span className="indicator-label">{t('topbar.signal')}</span>
+            <span className="indicator-value">{getSignalQuality()}</span>
+          </div>
+        )}
         
         {/* Batería */}
-        <div className="indicator">
-          <span className="indicator-icon">🔋</span>
-          <span className="indicator-label">{t('topbar.battery')}</span>
-          <span className="indicator-value">{getBatteryStatus()}</span>
-        </div>
+        {hasTelemetry && (
+          <div className="indicator">
+            <span className="indicator-icon">🔋</span>
+            <span className="indicator-label">{t('topbar.battery')}</span>
+            <span className="indicator-value">{getBatteryStatus()}</span>
+          </div>
+        )}
       </div>
       
       <div className="top-bar-right">
@@ -414,14 +427,18 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           disabled={connecting}
           title={isConnected ? 'Desconectar' : t('topbar.autoConnect')}
         >
-          {connecting ? '⏳' : (isConnected ? '🔌' : '🔌')}
+          {connecting ? (
+            <span className="spinner">⏳</span>
+          ) : (
+            isConnected ? '🔌' : '🔌'
+          )}
         </button>
         <button 
           className={`settings-button ${isSettingsOpen ? 'active' : ''}`}
           onClick={onSettingsClick}
           title={t('topbar.settings')}
         >
-          ⚙️
+          {isSettingsOpen ? '📍' : '⚙️'}
         </button>
       </div>
     </div>

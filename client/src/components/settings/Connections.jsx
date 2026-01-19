@@ -40,30 +40,6 @@ function Connections() {
       }
     }
   }, [])
-  
-  // Sincronizar activeConnection con el estado real de conexión desde WebSocket
-  useEffect(() => {
-    const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
-    
-    // Si hay conexión activa en el servidor, restaurar desde localStorage
-    if (connectionStatus?.connected && savedActiveConnection && !activeConnection) {
-      setActiveConnection(JSON.parse(savedActiveConnection))
-    }
-    
-    // Si el servidor NO está conectado y tenemos activeConnection, solo limpiar después de un delay
-    // para evitar limpiar durante reconexiones temporales
-    if (!connectionStatus?.connected && activeConnection !== null) {
-      const timer = setTimeout(() => {
-        // Verificar nuevamente después del delay
-        if (!connectionStatus?.connected) {
-          setActiveConnection(null)
-          localStorage.removeItem('mavlink_active_connection')
-        }
-      }, 5000) // Dar 5 segundos para reconectar antes de limpiar
-      
-      return () => clearTimeout(timer)
-    }
-  }, [connectionStatus?.connected, activeConnection])
 
   // Guardar conexiones cuando cambien
   useEffect(() => {

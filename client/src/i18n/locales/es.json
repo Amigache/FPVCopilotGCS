@@ -42,6 +42,10 @@
       "noFix": "No Fix",
       "fix2d": "2D Fix",
       "fix3d": "3D Fix"
+    },
+    "connectionError": {
+      "noSavedConnections": "No hay conexiones guardadas. Configura una en la sección Conexiones.",
+      "connectionFailed": "No se pudo establecer conexión con el vehículo."
     }
   },
   "settings": {

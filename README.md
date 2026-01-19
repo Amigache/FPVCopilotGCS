@@ -1,31 +1,80 @@
 # FPV Copilot GCS
 
-Ground Control Station (GCS) para drones FPV con soporte MAVLink, diseñado para ejecutarse en Raspberry Pi Zero con pantalla HDMI fullscreen (modo kiosk).
+Ground Control Station (GCS) profesional para drones con soporte MAVLink completo, diseñado para ejecutarse en Raspberry Pi Zero con pantalla HDMI fullscreen (modo kiosk). Interfaz moderna estilo Android con telemetría en tiempo real.
 
 ## ✨ Características
 
 ### 🎯 Funcionalidades principales
 
-- **Comunicación MAVLink**: Soporte completo para conexiones Serial, TCP y UDP
-- **Telemetría en tiempo real**: Monitoreo de señal, batería, GPS, velocidad y más
-- **Mapa interactivo**: 
+- **Comunicación MAVLink completa**: 
+  - Serial (USB/UART) con soporte Web Serial API
+  - TCP (Cliente/Servidor)
+  - UDP (bidireccional con auto-discovery)
+- **Telemetría en tiempo real vía WebSocket**: 
+  - Monitoreo de señal, batería, GPS, velocidad, altitud
+  - Indicadores de estado armado/desarmado
+  - Modos de vuelo específicos por tipo de vehículo (Copter, Plane, Rover)
+  - System Messages con filtrado por severidad
+- **Mapa interactivo avanzado**: 
   - Visualización con Leaflet (OpenStreetMap y vista satélite)
-  - Seguimiento automático de vehículos
+  - Seguimiento automático de múltiples vehículos
   - Marcadores direccionales con heading en tiempo real
-  - Menú contextual para interacciones en el mapa
-- **Control de vehículos**: Armado/desarmado con confirmaciones de seguridad
-- **Gestión de parámetros**: Descarga, edición y carga de parámetros del vehículo
-- **Interfaz táctil**: Teclado en pantalla para dispositivos touch
-- **Multiidioma**: Soporte para Español e Inglés (i18n)
-- **Auto-reconexión**: Conexión automática al iniciar la aplicación
-- **Modo kiosk**: Ejecución en pantalla completa sin escritorio
+  - Menú contextual para waypoints y comandos
+  - Paneles laterales colapsables con animaciones suaves
+- **Control de vehículos**: 
+  - Armado/desarmado con confirmaciones de seguridad
+  - Cambio de modos de vuelo desde dropdown
+  - Comandos MAVLink (Arm, Disarm, Set Mode)
+- **Gestión completa de parámetros**: 
+  - Descarga y visualización de todos los parámetros
+  - Edición con validación de tipos (INT/FLOAT)
+  - Modal de progreso durante descarga
+  - Búsqueda y filtrado de parámetros
+- **Configuración de vehículo**:
+  - Modos de vuelo (configuración por canal RC)
+  - Puertos seriales (protocol assignment)
+  - Servos y salidas (configuración de funciones)
+  - Parámetros avanzados con búsqueda
+- **Interfaz táctil optimizada**: 
+  - Teclado en pantalla para entrada de texto/números
+  - Diseño responsive para pantallas touch
+  - Botones grandes y accesibles
+- **Multiidioma**: Soporte completo para Español e Inglés (i18n)
+- **Auto-reconexión inteligente**: 
+  - Reconexión automática al iniciar
+  - Reintento ante desconexiones
+  - Gestión de conexiones guardadas
+- **Modo kiosk**: Ejecución fullscreen sin escritorio en Raspberry Pi
 
-### 🎨 Interfaz de usuario
+### 🎨 Interfaz de usuario moderna
 
-- **Top Bar**: Badges con información de vehículo, estado armado, señal, batería, GPS y telemetría
-- **Sidebar**: Panel deslizante con información del vehículo y controles de acción
-- **Mapa**: Vista principal con vehículos, posición y controles de navegación
-- **Configuración**: Panel de ajustes con conexiones, parámetros y configuración general
+- **Top Bar**: 
+  - Indicadores dinámicos: Vehículo, Estado armado (con dropdown), Modo de vuelo (con dropdown), Señal, Batería
+  - Botón de conexión/desconexión con estado visual
+  - Botón de Settings que cambia a icono de mapa según la vista activa
+- **Sidebar izquierdo (System Messages)**: 
+  - Panel colapsable con mensajes del sistema
+  - Filtrado por severidad (Info, Warning, Error, Critical)
+  - Timestamps y origen por vehículo
+  - Contenido con ancho fijo para evitar reajustes visuales
+- **Sidebar derecho (Active Vehicle)**: 
+  - Panel deslizante con telemetría detallada
+  - Botón de Vehicle Config para acceso rápido
+  - Información de GPS, velocidad, altitud, heading
+- **Mapa principal**: 
+  - Vista Leaflet con capas OpenStreetMap y Satellite
+  - Marcadores de vehículos con dirección (SVG)
+  - Controles de seguimiento y centrado
+  - Menú contextual para interacciones
+- **Settings**: 
+  - Conexiones: Gestión de conexiones Serial/TCP/UDP
+  - General: Idioma, unidades, preferencias
+  - About: Información del proyecto y tecnologías
+- **Vehicle Config**:
+  - Flight Modes: Configuración de modos de vuelo
+  - Serial Ports: Asignación de protocolos
+  - Servos: Configuración de salidas RC
+  - Parameters: Editor completo de parámetros ArduPilot
 
 ## 🔧 Requisitos del sistema
 

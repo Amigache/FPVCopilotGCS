@@ -1,4 +1,6 @@
 import net from 'net'
+import dgram from 'dgram'
+import { SerialPort } from 'serialport'
 import MAVLinkParser from './mavlink-parser.js'
 
 // Servicio MAVLink para gestionar la comunicación con Ardupilot
@@ -13,9 +15,12 @@ class MAVLinkService {
     this.pendingParamSet = null // Para rastrear PARAM_SET pendientes
     this.listeners = []
     this.connectionType = null
+    this.serialPort = null
     this.tcpClient = null
     this.tcpServer = null
     this.udpSocket = null
+    this.remoteAddress = null
+    this.remotePort = null
     this.io = null // Socket.IO instance
     
     // Throttling para WebSocket (evitar saturar con actualizaciones)
@@ -230,14 +235,131 @@ class MAVLinkService {
 
   // Conectar vía Serial (placeholder)
   async connectSerial(config) {
-    // Aquí iría la implementación con serialport
-    throw new Error('Conexión Serial en desarrollo')
+    const { port, baudrate, webSerialPort } = config || {}
+    const baudRate = parseInt(baudrate ?? 115200, 10)
+
+    // Resolver el path real cuando llega desde Web Serial (solo VID/PID descriptivo)
+    let resolvedPath = port
+
+    if (webSerialPort) {
+      // Intentar mapear VID/PID a un path real usando serialport.list()
+      const match = /VID:\s*([0-9a-fA-F]+).*PID:\s*([0-9a-fA-F]+)/.exec(port || '')
+      if (match) {
+        const vid = match[1].toLowerCase()
+        const pid = match[2].toLowerCase()
+        const available = await SerialPort.list()
+        const found = available.find((p) => p.vendorId?.toLowerCase() === vid && p.productId?.toLowerCase() === pid)
+        if (found?.path) {
+          resolvedPath = found.path
+          console.log(`MAVLink Serial: mapeado Web Serial ${port} -> ${resolvedPath}`)
+        }
+      }
+    }
+
+    if (!resolvedPath) {
+      throw new Error('No se pudo determinar el puerto serial. Ingresa la ruta /dev/ttyXXX manualmente.')
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        console.log(`MAVLink Serial: conectando a ${resolvedPath} @ ${baudRate}`)
+
+        this.serialPort = new SerialPort({ path: resolvedPath, baudRate, autoOpen: false })
+
+        // Apertura del puerto
+        this.serialPort.open((err) => {
+          if (err) {
+            console.error('MAVLink Serial: error al abrir puerto:', err.message)
+            this.serialPort = null
+            return reject(err)
+          }
+
+          console.log(`MAVLink Serial: puerto abierto (${resolvedPath})`)
+          this.isConnected = true
+          this.connectionType = 'serial'
+          this.emitConnectionStatus()
+
+          resolve({ port: resolvedPath, baudRate })
+        })
+
+        // Datos entrantes
+        this.serialPort.on('data', (data) => {
+          this.processMAVLinkData(data)
+        })
+
+        // Errores del puerto
+        this.serialPort.on('error', (error) => {
+          console.error('MAVLink Serial: error en puerto:', error.message)
+          this.isConnected = false
+          this.emitConnectionStatus()
+        })
+
+        // Cierre inesperado
+        this.serialPort.on('close', () => {
+          console.log('MAVLink Serial: puerto cerrado')
+          this.isConnected = false
+          this.serialPort = null
+          this.vehicles.clear()
+          this.emitVehiclesUpdate()
+          this.emitConnectionStatus()
+        })
+      } catch (error) {
+        console.error('MAVLink Serial: excepción al conectar:', error)
+        this.serialPort = null
+        reject(error)
+      }
+    })
   }
 
   // Conectar vía UDP (placeholder)
   async connectUDP(config) {
-    // Aquí iría la implementación con dgram
-    throw new Error('Conexión UDP en desarrollo')
+    return new Promise((resolve, reject) => {
+      const { localIp = '0.0.0.0', localPort = 14550, remoteIp, remotePort } = config || {}
+
+      try {
+        console.log(`MAVLink UDP: vinculando en ${localIp}:${localPort}`)
+        this.udpSocket = dgram.createSocket('udp4')
+
+        // Guardar destino (puede ser opcional si solo escuchamos)
+        this.remoteAddress = remoteIp || this.remoteAddress
+        this.remotePort = remotePort ? parseInt(remotePort) : this.remotePort
+
+        this.udpSocket.on('message', (msg, rinfo) => {
+          // Si no teníamos destino remoto, usar el que acaba de hablar
+          if (!this.remoteAddress || !this.remotePort) {
+            this.remoteAddress = rinfo.address
+            this.remotePort = rinfo.port
+          }
+          this.processMAVLinkData(msg)
+        })
+
+        this.udpSocket.on('error', (err) => {
+          console.error('MAVLink UDP: error en socket:', err.message)
+          this.isConnected = false
+          this.emitConnectionStatus()
+          this.udpSocket?.close()
+        })
+
+        this.udpSocket.on('close', () => {
+          console.log('MAVLink UDP: socket cerrado')
+          this.isConnected = false
+          this.udpSocket = null
+          this.emitConnectionStatus()
+        })
+
+        this.udpSocket.bind(parseInt(localPort), localIp, () => {
+          console.log(`MAVLink UDP: escuchando en ${localIp}:${localPort}`)
+          this.isConnected = true
+          this.connectionType = 'udp'
+          this.emitConnectionStatus()
+          resolve({ mode: 'udp', localIp, localPort, remoteIp: this.remoteAddress, remotePort: this.remotePort })
+        })
+      } catch (error) {
+        console.error('MAVLink UDP: excepción al conectar:', error)
+        this.udpSocket = null
+        reject(error)
+      }
+    })
   }
 
   // Procesar datos MAVLink recibidos
@@ -542,6 +664,15 @@ class MAVLinkService {
       this.tcpClient.destroy()
       this.tcpClient = null
     }
+
+    if (this.serialPort) {
+      try {
+        this.serialPort.close()
+      } catch (err) {
+        console.error('MAVLink Serial: error cerrando puerto:', err.message)
+      }
+      this.serialPort = null
+    }
     
     if (this.tcpServer) {
       this.tcpServer.close()
@@ -552,6 +683,9 @@ class MAVLinkService {
       this.udpSocket.close()
       this.udpSocket = null
     }
+
+    this.remoteAddress = null
+    this.remotePort = null
     
     this.isConnected = false
     this.connection = null
@@ -569,7 +703,7 @@ class MAVLinkService {
     try {
       // Verificar que haya vehículos conectados o conexión TCP/UDP abierta
       const hasVehicles = this.vehicles.size > 0
-      const hasConnection = this.tcpClient || this.udpSocket
+      const hasConnection = this.tcpClient || this.udpSocket || this.serialPort
       
       if (!hasConnection) {
         throw new Error('No hay conexión activa con el vehículo. Establece una conexión en la sección de Conexiones.')
@@ -937,7 +1071,7 @@ class MAVLinkService {
   getStatus() {
     return {
       connected: this.isConnected,
-      hasClient: !!(this.tcpClient || this.udpSocket),
+      hasClient: !!(this.tcpClient || this.udpSocket || this.serialPort),
       connectionType: this.connectionType,
       total: this.paramCount,
       received: this.receivedParams,

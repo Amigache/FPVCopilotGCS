@@ -49,6 +49,22 @@ function AboutUs() {
           </li>
           <li className="feature-item">
             <span className="feature-icon">✅</span>
+            <span>MAVLink Serial/TCP/UDP completo</span>
+          </li>
+          <li className="feature-item">
+            <span className="feature-icon">✅</span>
+            <span>WebSocket para telemetría en tiempo real</span>
+          </li>
+          <li className="feature-item">
+            <span className="feature-icon">✅</span>
+            <span>Gestión completa de parámetros ArduPilot</span>
+          </li>
+          <li className="feature-item">
+            <span className="feature-icon">✅</span>
+            <span>Vehicle Config (Modos, Servos, Puertos)</span>
+          </li>
+          <li className="feature-item">
+            <span className="feature-icon">✅</span>
             <span>{t('about.featuresList.optimized')}</span>
           </li>
         </ul>
@@ -63,15 +79,31 @@ function AboutUs() {
           </div>
           <div className="tech-item">
             <span className="tech-name">Node.js</span>
-            <span className="tech-version">Express</span>
+            <span className="tech-version">Express + Socket.IO</span>
+          </div>
+          <div className="tech-item">
+            <span className="tech-name">MAVLink</span>
+            <span className="tech-version">v1.0/v2.0</span>
           </div>
           <div className="tech-item">
             <span className="tech-name">Leaflet</span>
-            <span className="tech-version">Maps</span>
+            <span className="tech-version">Maps + React Leaflet</span>
           </div>
           <div className="tech-item">
             <span className="tech-name">Vite</span>
             <span className="tech-version">5.0</span>
+          </div>
+          <div className="tech-item">
+            <span className="tech-name">SerialPort</span>
+            <span className="tech-version">13.x</span>
+          </div>
+          <div className="tech-item">
+            <span className="tech-name">i18next</span>
+            <span className="tech-version">Multiidioma</span>
+          </div>
+          <div className="tech-item">
+            <span className="tech-name">WebSocket</span>
+            <span className="tech-version">Tiempo real</span>
           </div>
         </div>
       </div>

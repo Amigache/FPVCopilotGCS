@@ -42,6 +42,10 @@
       "noFix": "No Fix",
       "fix2d": "2D Fix",
       "fix3d": "3D Fix"
+    },
+    "connectionError": {
+      "noSavedConnections": "No saved connections. Configure one in the Connections section.",
+      "connectionFailed": "Could not establish connection with the vehicle."
     }
   },
   "settings": {
