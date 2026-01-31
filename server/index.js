@@ -37,15 +37,8 @@ io.on('connection', (socket) => {
 });
 
 // Middleware
-// app.use(cors());
-// app.use(express.json());
-
-// 👉 SERVIR EL FRONTEND
-app.use(express.static(path.join(__dirname, "../client/dist")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
-});
+app.use(cors());
+app.use(express.json());
 
 // API Routes
 app.get('/api/status', (req, res) => {
