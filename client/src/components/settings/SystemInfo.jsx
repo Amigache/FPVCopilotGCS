@@ -671,8 +671,5 @@ function SystemInfo() {
     </div>
   )
 }
-    </div>
-  )
-}
 
 export default SystemInfo
