@@ -453,6 +453,47 @@ app.post('/api/system/touch/calibrate', async (req, res) => {
   }
 });
 
+app.post('/api/system/touch/reset', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    
+    if (!deviceId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Se requiere deviceId' 
+      });
+    }
+    
+    // Configurar variables de entorno
+    const display = process.env.DISPLAY || ':0';
+    const xauthority = process.env.XAUTHORITY || '';
+    
+    let envVars = `DISPLAY=${display}`;
+    if (xauthority) {
+      envVars += ` XAUTHORITY=${xauthority}`;
+    }
+    
+    // Resetear a matriz identidad
+    const identityMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    const matrixStr = identityMatrix.join(' ');
+    const command = `${envVars} xinput set-prop ${deviceId} "Coordinate Transformation Matrix" ${matrixStr}`;
+    
+    await execPromise(command);
+    
+    res.json({ 
+      success: true, 
+      message: 'Calibración reseteada correctamente',
+      matrix: identityMatrix
+    });
+  } catch (error) {
+    console.error('Error resetting calibration:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error reseteando calibración: ' + error.message 
+    });
+  }
+});
+
 app.post('/api/system/touch/save', async (req, res) => {
   try {
     const { deviceId, deviceName, matrix, disableId, reattachId, masterId } = req.body;

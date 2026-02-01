@@ -588,7 +588,11 @@
     "refresh": "Actualizar",
     "touchCalibration": "Calibración Táctil",
     "touchCalibrationDescription": "Calibra la precisión de la pantalla táctil para mejorar la respuesta en toda el área de la pantalla",
-    "calibrateTouch": "Calibrar Pantalla Táctil"
+    "calibrateTouch": "Calibrar Pantalla Táctil",
+    "resetCalibration": "Resetear Calibración",
+    "confirmReset": "¿Estás seguro de resetear la calibración táctil? Esto restaurará los valores predeterminados.",
+    "resetSuccess": "Calibración reseteada correctamente",
+    "resetError": "Error al resetear la calibración"
   },
   "touchCalibration": {
     "selectDevice": "Seleccionar Dispositivo Táctil",

@@ -590,7 +590,11 @@
     "refresh": "Refresh",
     "touchCalibration": "Touch Calibration",
     "touchCalibrationDescription": "Calibrate touchscreen precision to improve response across the entire screen area",
-    "calibrateTouch": "Calibrate Touchscreen"
+    "calibrateTouch": "Calibrate Touchscreen",
+    "resetCalibration": "Reset Calibration",
+    "confirmReset": "Are you sure you want to reset the touch calibration? This will restore default values.",
+    "resetSuccess": "Calibration reset successfully",
+    "resetError": "Error resetting calibration"
   },
   "touchCalibration": {
     "selectDevice": "Select Touch Device",

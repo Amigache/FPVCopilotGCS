@@ -13,12 +13,14 @@ function SystemInfo() {
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [showCalibration, setShowCalibration] = useState(false)
+  const [touchDevices, setTouchDevices] = useState([])
 
   useEffect(() => {
     fetchSystemInfo()
     fetchDisplayInfo()
     fetchDevices()
     fetchNetworkInfo()
+    fetchTouchDevices()
   }, [])
 
   const fetchSystemInfo = async () => {
@@ -60,6 +62,42 @@ function SystemInfo() {
       setNetworkInfo(data)
     } catch (err) {
       console.error('Error fetching network info:', err)
+    }
+  }
+
+  const fetchTouchDevices = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/system/touch/devices')
+      const data = await response.json()
+      setTouchDevices(data.devices || [])
+    } catch (err) {
+      console.error('Error fetching touch devices:', err)
+    }
+  }
+
+  const handleResetCalibration = async (deviceId) => {
+    if (!window.confirm(t('systemInfo.confirmReset'))) {
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:3000/api/system/touch/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        alert(t('systemInfo.resetSuccess'))
+        fetchTouchDevices()
+      } else {
+        alert(t('systemInfo.resetError') + ': ' + result.error)
+      }
+    } catch (error) {
+      console.error('Error resetting calibration:', error)
+      alert(t('systemInfo.resetError') + ': ' + error.message)
     }
   }
 
@@ -228,12 +266,22 @@ function SystemInfo() {
         <p className="subsection-description">
           {t('systemInfo.touchCalibrationDescription')}
         </p>
-        <button 
-          className="btn-calibrate"
-          onClick={() => setShowCalibration(true)}
-        >
-          🎯 {t('systemInfo.calibrateTouch')}
-        </button>
+        <div className="calibration-buttons">
+          <button 
+            className="btn-calibrate"
+            onClick={() => setShowCalibration(true)}
+          >
+            🎯 {t('systemInfo.calibrateTouch')}
+          </button>
+          {touchDevices.length > 0 && (
+            <button 
+              className="btn-reset-calibration"
+              onClick={() => handleResetCalibration(touchDevices[0].id)}
+            >
+              🔄 {t('systemInfo.resetCalibration')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

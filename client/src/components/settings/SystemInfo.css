@@ -228,6 +228,12 @@
   margin: 0 0 16px 0;
 }
 
+.calibration-buttons {
+  display: flex;
+  gap: 12px;
+  flex-direction: column;
+}
+
 .btn-calibrate {
   padding: 12px 24px;
   background: linear-gradient(135deg, #ff6b6b, #ff8e53);
@@ -249,6 +255,25 @@
 
 .btn-calibrate:active {
   transform: translateY(0);
+}
+
+.btn-reset-calibration {
+  padding: 10px 20px;
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.4);
+  border-radius: 8px;
+  color: #ff9800;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.btn-reset-calibration:hover {
+  background: rgba(255, 152, 0, 0.3);
+  border-color: #ff9800;
+  transform: translateY(-2px);
 }
 
 .loading-container {
