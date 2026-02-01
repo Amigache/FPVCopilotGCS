@@ -494,6 +494,50 @@ app.post('/api/system/touch/reset', async (req, res) => {
   }
 });
 
+app.post('/api/system/touch/reattach', async (req, res) => {
+  try {
+    const { deviceId, masterId } = req.body;
+    
+    if (!deviceId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Se requiere deviceId' 
+      });
+    }
+    
+    // Configurar variables de entorno
+    const display = process.env.DISPLAY || ':0';
+    const xauthority = process.env.XAUTHORITY || '';
+    
+    let envVars = `DISPLAY=${display}`;
+    if (xauthority) {
+      envVars += ` XAUTHORITY=${xauthority}`;
+    }
+    
+    // Si no se especifica masterId, buscar "Virtual core pointer" (normalmente ID 2)
+    const master = masterId || '2';
+    
+    // Reattach el dispositivo al master pointer
+    const command = `${envVars} xinput reattach ${deviceId} ${master}`;
+    
+    console.log(`🔗 Reattaching device ${deviceId} to master ${master}`);
+    await execPromise(command);
+    
+    res.json({ 
+      success: true, 
+      message: 'Dispositivo reconectado correctamente',
+      deviceId,
+      masterId: master
+    });
+  } catch (error) {
+    console.error('Error reattaching device:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error reconectando dispositivo: ' + error.message 
+    });
+  }
+});
+
 app.post('/api/system/touch/save', async (req, res) => {
   try {
     const { deviceId, deviceName, matrix, disableId, reattachId, masterId } = req.body;

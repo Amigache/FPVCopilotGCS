@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import TopBar from './components/TopBar'
 import BottomBar from './components/BottomBar'
@@ -20,6 +20,42 @@ function AppContent() {
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, action: null, systemId: null })
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Auto-reconectar dispositivo táctil al iniciar la aplicación
+  useEffect(() => {
+    const autoReattachTouch = async () => {
+      try {
+        console.log('🔍 Checking for touch devices...')
+        const response = await fetch('http://localhost:3000/api/system/touch/devices')
+        const data = await response.json()
+        
+        if (data.devices && data.devices.length > 0) {
+          const touchDevice = data.devices[0]
+          console.log(`🔗 Auto-reattaching touch device: ${touchDevice.name} (ID: ${touchDevice.id})`)
+          
+          const reattachResponse = await fetch('http://localhost:3000/api/system/touch/reattach', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceId: touchDevice.id, masterId: 2 })
+          })
+          
+          const result = await reattachResponse.json()
+          if (result.success) {
+            console.log('✅ Touch device reattached successfully')
+          } else {
+            console.warn('⚠️ Failed to reattach touch device:', result.error)
+          }
+        } else {
+          console.log('ℹ️ No touch devices found')
+        }
+      } catch (error) {
+        console.error('❌ Error auto-reattaching touch device:', error)
+      }
+    }
+
+    // Ejecutar después de un pequeño delay para que el servidor esté listo
+    setTimeout(autoReattachTouch, 1000)
+  }, [])
 
   const handleArmDisarmRequest = (action, systemId) => {
     setConfirmModal({

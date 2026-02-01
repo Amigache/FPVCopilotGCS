@@ -101,6 +101,28 @@ function SystemInfo() {
     }
   }
 
+  const handleReattachDevice = async (deviceId) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/system/touch/reattach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, masterId: 2 })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        alert(t('systemInfo.reattachSuccess'))
+        fetchTouchDevices()
+      } else {
+        alert(t('systemInfo.reattachError') + ': ' + result.error)
+      }
+    } catch (error) {
+      console.error('Error reattaching device:', error)
+      alert(t('systemInfo.reattachError') + ': ' + error.message)
+    }
+  }
+
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B'
     const k = 1024
@@ -274,12 +296,20 @@ function SystemInfo() {
             🎯 {t('systemInfo.calibrateTouch')}
           </button>
           {touchDevices.length > 0 && (
-            <button 
-              className="btn-reset-calibration"
-              onClick={() => handleResetCalibration(touchDevices[0].id)}
-            >
-              🔄 {t('systemInfo.resetCalibration')}
-            </button>
+            <>
+              <button 
+                className="btn-reattach"
+                onClick={() => handleReattachDevice(touchDevices[0].id)}
+              >
+                🔗 {t('systemInfo.reattachDevice')}
+              </button>
+              <button 
+                className="btn-reset-calibration"
+                onClick={() => handleResetCalibration(touchDevices[0].id)}
+              >
+                🔄 {t('systemInfo.resetCalibration')}
+              </button>
+            </>
           )}
         </div>
       </div>

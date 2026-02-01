@@ -257,6 +257,25 @@
   transform: translateY(0);
 }
 
+.btn-reattach {
+  padding: 10px 20px;
+  background: rgba(76, 175, 80, 0.2);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  border-radius: 8px;
+  color: #4caf50;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.btn-reattach:hover {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: #4caf50;
+  transform: translateY(-2px);
+}
+
 .btn-reset-calibration {
   padding: 10px 20px;
   background: rgba(255, 152, 0, 0.2);

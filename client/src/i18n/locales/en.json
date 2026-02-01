@@ -592,7 +592,12 @@
     "touchCalibrationDescription": "Calibrate touchscreen precision to improve response across the entire screen area",
     "calibrateTouch": "Calibrate Touchscreen",
     "resetCalibration": "Reset Calibration",
+    "reattachDevice": "Reconnect Device",
     "confirmReset": "Are you sure you want to reset the touch calibration? This will restore default values.",
+    "resetSuccess": "Calibration reset successfully",
+    "resetError": "Error resetting calibration",
+    "reattachSuccess": "Touch device reconnected successfully",
+    "reattachError": "Error reconnecting device",
     "resetSuccess": "Calibration reset successfully",
     "resetError": "Error resetting calibration"
   },

@@ -51,6 +51,9 @@ function TouchCalibration({ onClose, onComplete }) {
       alert(t('touchCalibration.noDeviceSelected'))
       return
     }
+    console.log('🚀 Starting calibration...')
+    console.log(`   Selected device: ${selectedDevice.name} (ID: ${selectedDevice.id})`)
+    console.log(`   Target points: ${targetPoints.length}`)
     setStep(1)
     setCalibrationPoints([])
     setCurrentPoint(0)
@@ -59,12 +62,28 @@ function TouchCalibration({ onClose, onComplete }) {
   const handleTouchPoint = (event) => {
     if (step !== 1) return
 
-    const rect = containerRef.current.getBoundingClientRect()
-    const touchX = (event.clientX || event.touches?.[0]?.clientX) - rect.left
-    const touchY = (event.clientY || event.touches?.[0]?.clientY) - rect.top
+    event.preventDefault()
+    event.stopPropagation()
 
+    const rect = containerRef.current.getBoundingClientRect()
+    
+    // Obtener coordenadas del toque
+    let touchX, touchY
+    if (event.type === 'touchstart' && event.touches && event.touches[0]) {
+      touchX = event.touches[0].clientX
+      touchY = event.touches[0].clientY
+    } else {
+      touchX = event.clientX
+      touchY = event.clientY
+    }
+
+    // Normalizar a [0, 1]
     const normalizedX = touchX / rect.width
     const normalizedY = touchY / rect.height
+
+    console.log(`📍 Point ${currentPoint + 1}/${targetPoints.length}:`)
+    console.log(`   Target: (${targetPoints[currentPoint].x}, ${targetPoints[currentPoint].y})`)
+    console.log(`   Touch: (${normalizedX.toFixed(3)}, ${normalizedY.toFixed(3)})`)
 
     const newPoints = [...calibrationPoints, {
       target: targetPoints[currentPoint],
@@ -74,9 +93,11 @@ function TouchCalibration({ onClose, onComplete }) {
     setCalibrationPoints(newPoints)
 
     if (currentPoint < targetPoints.length - 1) {
+      console.log(`➡️  Moving to next point: ${currentPoint + 1} → ${currentPoint + 2}`)
       setCurrentPoint(currentPoint + 1)
     } else {
       // Calibración completa
+      console.log('✅ All calibration points collected')
       calculateMatrix(newPoints)
     }
   }
@@ -86,76 +107,62 @@ function TouchCalibration({ onClose, onComplete }) {
     setProcessing(true)
 
     try {
-      // Calcular matriz de transformación usando mínimos cuadrados
-      // Formato de matriz: [a b c d e f g h i]
-      // x' = ax + by + c
-      // y' = dx + ey + f
-      // w' = gx + hy + i (normalmente [0 0 1])
+      console.log('🧮 Calculating transformation matrix...')
+      console.log('Calibration points:', points)
 
-      let sumX = 0, sumY = 0, sumXx = 0, sumXy = 0, sumYx = 0, sumYy = 0
-      let sumTargetX = 0, sumTargetY = 0
-      let count = points.length
+      // Usar método más simple: calcular escalas y offsets promedio
+      let totalScaleX = 0, totalScaleY = 0
+      let totalOffsetX = 0, totalOffsetY = 0
+      const count = points.length
 
-      points.forEach(point => {
-        const actual = point.actual
-        const target = point.target
-
-        sumX += actual.x
-        sumY += actual.y
-        sumXx += actual.x * actual.x
-        sumXy += actual.x * actual.y
-        sumYx += actual.y * actual.x
-        sumYy += actual.y * actual.y
-        sumTargetX += target.x
-        sumTargetY += target.y
-      })
-
-      // Calcular diferencias promedio
-      const avgActualX = sumX / count
-      const avgActualY = sumY / count
-      const avgTargetX = sumTargetX / count
-      const avgTargetY = sumTargetY / count
-
-      let scaleX = 0, scaleY = 0, skewX = 0, skewY = 0
-
-      points.forEach(point => {
-        const dx = point.actual.x - avgActualX
-        const dy = point.actual.y - avgActualY
-        const dtx = point.target.x - avgTargetX
-        const dty = point.target.y - avgTargetY
-
-        scaleX += dtx * dx
-        skewX += dtx * dy
-        skewY += dty * dx
-        scaleY += dty * dy
-      })
-
-      const variance = points.reduce((sum, point) => {
-        const dx = point.actual.x - avgActualX
-        const dy = point.actual.y - avgActualY
-        return sum + dx * dx + dy * dy
-      }, 0)
-
-      if (variance !== 0) {
-        scaleX /= variance
-        scaleY /= variance
-        skewX /= variance
-        skewY /= variance
-      } else {
-        scaleX = scaleY = 1
-        skewX = skewY = 0
+      // Calcular la transformación necesaria para cada punto
+      for (let i = 0; i < count; i++) {
+        const point = points[i]
+        
+        // dx = target_x - actual_x
+        // dy = target_y - actual_y
+        const dx = point.target.x - point.actual.x
+        const dy = point.target.y - point.actual.y
+        
+        totalOffsetX += dx
+        totalOffsetY += dy
+        
+        // Calcular escalas basadas en la diferencia con el centro
+        if (point.actual.x !== 0.5) {
+          const scaleX = (point.target.x - 0.5) / (point.actual.x - 0.5)
+          totalScaleX += scaleX
+        }
+        if (point.actual.y !== 0.5) {
+          const scaleY = (point.target.y - 0.5) / (point.actual.y - 0.5)
+          totalScaleY += scaleY
+        }
       }
 
-      // Calcular offset
-      const offsetX = avgTargetX - (scaleX * avgActualX + skewX * avgActualY)
-      const offsetY = avgTargetY - (skewY * avgActualX + scaleY * avgActualY)
+      // Promediar
+      const avgOffsetX = totalOffsetX / count
+      const avgOffsetY = totalOffsetY / count
+      
+      // Contar cuántos puntos contribuyeron a las escalas
+      const scaleCountX = points.filter(p => p.actual.x !== 0.5).length
+      const scaleCountY = points.filter(p => p.actual.y !== 0.5).length
+      
+      const scaleX = scaleCountX > 0 ? totalScaleX / scaleCountX : 1
+      const scaleY = scaleCountY > 0 ? totalScaleY / scaleCountY : 1
+
+      console.log('Calculated values:')
+      console.log(`  Scale: (${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`)
+      console.log(`  Offset: (${avgOffsetX.toFixed(3)}, ${avgOffsetY.toFixed(3)})`)
 
       // Construir matriz de transformación
+      // x' = scaleX * x + offsetX
+      // y' = scaleY * y + offsetY
       const matrix = [
-        scaleX, skewX, offsetX,
-        skewY, scaleY, offsetY,
+        scaleX, 0, avgOffsetX,
+        0, scaleY, avgOffsetY,
         0, 0, 1
       ]
+
+      console.log('Transformation matrix:', matrix.map(n => n.toFixed(3)).join(', '))
 
       // Aplicar calibración
       const response = await fetch('http://localhost:3000/api/system/touch/calibrate', {
@@ -264,7 +271,15 @@ function TouchCalibration({ onClose, onComplete }) {
   )
 
   const renderCalibrationScreen = () => {
+    if (currentPoint >= targetPoints.length) {
+      console.log('⚠️ currentPoint >= targetPoints.length, not rendering')
+      return null
+    }
+
     const point = targetPoints[currentPoint]
+    console.log(`🎯 Rendering calibration point ${currentPoint + 1}/${targetPoints.length}:`, point)
+    console.log(`   Position: ${point.x * 100}% x ${point.y * 100}%`)
+    console.log(`   containerReady: ${containerReady}`)
     
     return (
       <div 
@@ -291,6 +306,24 @@ function TouchCalibration({ onClose, onComplete }) {
             <div className="target-center"></div>
           </div>
         )}
+
+        {/* DEBUG: Mostrar puntos anteriores tocados */}
+        {calibrationPoints.map((cp, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${cp.actual.x * 100}%`,
+              top: `${cp.actual.y * 100}%`,
+              width: '10px',
+              height: '10px',
+              background: 'rgba(255, 0, 0, 0.5)',
+              borderRadius: '50%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none'
+            }}
+          />
+        ))}
 
         <button className="btn-cancel-calibration" onClick={() => setStep(0)}>
           ✕ {t('common.cancel')}
