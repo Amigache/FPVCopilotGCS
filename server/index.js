@@ -315,35 +315,58 @@ app.get('/api/system/touch/devices', async (req, res) => {
   try {
     const devices = [];
     
+    // Configurar DISPLAY para xinput
+    const display = process.env.DISPLAY || ':0';
+    const xauthority = process.env.XAUTHORITY || '';
+    
     // Listar dispositivos de entrada
     try {
-      const { stdout } = await execPromise('xinput list --short');
+      let envVars = `DISPLAY=${display}`;
+      if (xauthority) {
+        envVars += ` XAUTHORITY=${xauthority}`;
+      }
+      
+      console.log(`🔍 Attempting to list xinput devices with: ${envVars}`);
+      console.log(`   User: ${process.env.USER || 'unknown'}`);
+      console.log(`   Home: ${process.env.HOME || 'unknown'}`);
+      
+      const { stdout } = await execPromise(`${envVars} xinput list --short`);
       const lines = stdout.split('\n');
       
+      console.log('✅ Successfully connected to X server');
+      console.log('🔍 Searching for touch devices in xinput list...');
+      
       for (const line of lines) {
+        if (!line.trim()) continue;
+        
         const lineLower = line.toLowerCase();
         
-        // Buscar dispositivos táctiles (ampliar búsqueda para incluir eGalax y otros)
+        // Buscar dispositivos táctiles (búsqueda amplia)
         const isTouchDevice = lineLower.includes('touch') || 
                              lineLower.includes('touchscreen') ||
                              lineLower.includes('pointer') ||
                              lineLower.includes('egalax') ||
                              lineLower.includes('galax') ||
                              lineLower.includes('touchpanel') ||
-                             lineLower.includes('digitizer');
+                             lineLower.includes('digitizer') ||
+                             lineLower.includes('touchcontroller') ||
+                             lineLower.includes('usb touchcontroller') ||
+                             (lineLower.includes('usb') && lineLower.includes('controller'));
         
-        if (isTouchDevice) {
-          // Extraer ID y nombre
-          const idMatch = line.match(/id=(\d+)/);
-          const nameMatch = line.match(/↳?\s*(.+?)\s+id=/);
+        // Extraer ID y nombre - ignorar símbolos como ∼, ⎜, ↳, etc.
+        const idMatch = line.match(/id=(\d+)/);
+        const nameMatch = line.match(/[∼⎜↳⎡⎣]?\s*(.+?)\s+id=/);
+        
+        if (idMatch && nameMatch) {
+          const id = idMatch[1];
+          const name = nameMatch[1].trim();
           
-          if (idMatch && nameMatch) {
-            const id = idMatch[1];
-            const name = nameMatch[1].trim();
-            
+          console.log(`  Device found: "${name}" (ID: ${id}, isTouchDevice: ${isTouchDevice})`);
+          
+          if (isTouchDevice) {
             // Obtener propiedades del dispositivo
             try {
-              const { stdout: props } = await execPromise(`xinput list-props ${id}`);
+              const { stdout: props } = await execPromise(`${envVars} xinput list-props ${id}`);
               
               // Extraer matriz actual si existe
               const matrixMatch = props.match(/Coordinate Transformation Matrix[^:]*:\s*([\d\.\-\s,]+)/);
@@ -352,23 +375,35 @@ app.get('/api/system/touch/devices', async (req, res) => {
                 matrix = matrixMatch[1].trim().split(/[,\s]+/).map(parseFloat);
               }
               
+              console.log(`  ✓ Added touch device: "${name}" (ID: ${id})`);
               // Añadir dispositivo incluso si no tiene matriz (la crearemos al calibrar)
               devices.push({ id, name, matrix });
             } catch (propError) {
               console.error(`Error getting props for device ${id}:`, propError);
               // Añadir dispositivo aunque falle la lectura de propiedades
+              console.log(`  ✓ Added touch device (no props): "${name}" (ID: ${id})`);
               devices.push({ id, name, matrix: null });
             }
           }
         }
       }
+      
+      console.log(`📱 Total touch devices found: ${devices.length}`);
     } catch (error) {
-      console.error('Error listing input devices:', error);
+      console.error('❌ Error listing input devices:', error.message);
+      console.error('   Command failed, likely X server access issue');
+      console.error('   Ensure DISPLAY and XAUTHORITY are set correctly');
+      console.error('   Try running: xhost +local: from X session');
     }
     
     res.json({ devices });
   } catch (error) {
-    res.status(500).json({ error: 'Error obteniendo dispositivos táctiles' });
+    console.error('❌ Fatal error in /api/system/touch/devices:', error);
+    res.status(500).json({ 
+      error: 'Error obteniendo dispositivos táctiles',
+      details: error.message,
+      hint: 'Verifica que el servidor tenga acceso al X server (DISPLAY y xhost +local:)'
+    });
   }
 });
 
@@ -383,9 +418,18 @@ app.post('/api/system/touch/calibrate', async (req, res) => {
       });
     }
     
+    // Configurar variables de entorno
+    const display = process.env.DISPLAY || ':0';
+    const xauthority = process.env.XAUTHORITY || '';
+    
+    let envVars = `DISPLAY=${display}`;
+    if (xauthority) {
+      envVars += ` XAUTHORITY=${xauthority}`;
+    }
+    
     // Aplicar la matriz de transformación
     const matrixStr = matrix.join(' ');
-    const command = `DISPLAY=${process.env.DISPLAY || ':0'} xinput set-prop ${deviceId} "Coordinate Transformation Matrix" ${matrixStr}`;
+    const command = `${envVars} xinput set-prop ${deviceId} "Coordinate Transformation Matrix" ${matrixStr}`;
     
     await execPromise(command);
     
