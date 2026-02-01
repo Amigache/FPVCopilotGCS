@@ -109,7 +109,22 @@ export function useWebSocket() {
 
   useEffect(() => {
     // Conectar al WebSocket del servidor
-    const serverUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:3000'
+    // En desarrollo: usa localhost:3000
+    // En producción: usa variable de entorno o construye URL con puerto 3000
+    let serverUrl
+    if (import.meta.env.PROD) {
+      // Si hay una variable de entorno definida, usarla
+      if (import.meta.env.VITE_BACKEND_URL) {
+        serverUrl = import.meta.env.VITE_BACKEND_URL
+      } else {
+        // En producción, usar el mismo host pero puerto 3000
+        const hostname = window.location.hostname
+        const protocol = window.location.protocol
+        serverUrl = `${protocol}//${hostname}:3000`
+      }
+    } else {
+      serverUrl = 'http://localhost:3000'
+    }
     
     console.log('🔌 Conectando WebSocket a:', serverUrl)
     

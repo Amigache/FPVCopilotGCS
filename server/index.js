@@ -18,8 +18,9 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173',
-    methods: ['GET', 'POST']
+    origin: process.env.NODE_ENV === 'production' ? '*' : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -496,7 +497,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`🔌 WebSocket server ready`);
 });
