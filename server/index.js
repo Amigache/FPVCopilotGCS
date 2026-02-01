@@ -316,10 +316,17 @@ app.get('/api/wifi/scan', async (req, res) => {
     // Intentar con nmcli primero (NetworkManager)
     try {
       const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list');
-      const networks = stdout.trim().split('\n')
-        .filter(line => line)
-        .map(line => {
-          const [ssid, signal, security, inUse] = line.split(':');
+      console.log('WiFi scan output:', stdout);
+      
+      const lines = stdout.trim().split('\n');
+      console.log('Total lines:', lines.length);
+      
+      const networks = lines
+        .filter(line => line && line.trim())
+        .map((line, index) => {
+          const parts = line.split(':');
+          console.log(`Line ${index}:`, parts);
+          const [ssid, signal, security, inUse] = parts;
           return {
             ssid: ssid || 'Hidden Network',
             signal: parseInt(signal) || 0,
@@ -327,7 +334,7 @@ app.get('/api/wifi/scan', async (req, res) => {
             connected: inUse === '*'
           };
         })
-        .filter(network => network.ssid !== '--')
+        .filter(network => network.ssid && network.ssid !== '--' && network.ssid !== 'SSID')
         // Eliminar duplicados y ordenar por señal
         .reduce((acc, curr) => {
           const exists = acc.find(n => n.ssid === curr.ssid);
@@ -338,7 +345,8 @@ app.get('/api/wifi/scan', async (req, res) => {
         }, [])
         .sort((a, b) => b.signal - a.signal);
       
-      res.json({ networks, method: 'nmcli' });
+      console.log('Processed networks:', networks.length);
+      res.json({ networks, method: 'nmcli', debug: { totalLines: lines.length, processedNetworks: networks.length } });
       return;
     } catch (nmcliError) {
       // Si nmcli falla, intentar con iwlist
