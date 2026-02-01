@@ -315,6 +315,16 @@ app.get('/api/wifi/scan', async (req, res) => {
   try {
     // Intentar con nmcli primero (NetworkManager)
     try {
+      // Primero forzar un rescan (requiere sudo)
+      try {
+        await execPromise('sudo nmcli dev wifi rescan');
+        // Esperar un poco para que complete el escaneo
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (rescanError) {
+        // Ignorar errores de rescan, a veces falla pero el list funciona igual
+        console.error('Rescan error:', rescanError.message);
+      }
+
       const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list');
       
       const lines = stdout.trim().split('\n');
@@ -342,15 +352,7 @@ app.get('/api/wifi/scan', async (req, res) => {
         }, [])
         .sort((a, b) => b.signal - a.signal);
       
-      res.json({ 
-        networks, 
-        method: 'nmcli', 
-        debug: { 
-          rawOutput: stdout.substring(0, 500), // Primeros 500 caracteres
-          totalLines: lines.length, 
-          processedNetworks: networks.length 
-        } 
-      });
+      res.json({ networks, method: 'nmcli' });
       return;
     } catch (nmcliError) {
       // Si nmcli falla, intentar con iwlist

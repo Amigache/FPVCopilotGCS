@@ -14,7 +14,6 @@ function SystemInfo() {
   const [wifiConnecting, setWifiConnecting] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState(null)
   const [wifiPassword, setWifiPassword] = useState('')
-  const [wifiDebug, setWifiDebug] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
@@ -90,15 +89,10 @@ function SystemInfo() {
     try {
       const response = await fetch('http://localhost:3000/api/wifi/scan')
       const data = await response.json()
-      console.log('WiFi scan response:', data)
-      console.log('Networks count:', data.networks?.length)
-      console.log('Networks:', data.networks)
       setWifiNetworks(data.networks || [])
-      setWifiDebug(data.debug || null)
     } catch (err) {
       console.error('Error scanning WiFi:', err)
       setWifiNetworks([])
-      setWifiDebug({ error: err.message })
     } finally {
       setWifiScanning(false)
     }
@@ -494,22 +488,6 @@ function SystemInfo() {
             {wifiScanning ? '🔄 Escaneando...' : '🔍 Escanear'}
           </button>
         </div>
-
-        {wifiDebug && (
-          <div style={{ 
-            background: 'rgba(255,255,255,0.1)', 
-            padding: '10px', 
-            marginBottom: '10px', 
-            borderRadius: '5px',
-            fontSize: '12px',
-            fontFamily: 'monospace'
-          }}>
-            <div>🔍 Debug Info:</div>
-            <div>Líneas totales: {wifiDebug.totalLines}</div>
-            <div>Redes procesadas: {wifiDebug.processedNetworks}</div>
-            {wifiDebug.rawOutput && <div>Output: {wifiDebug.rawOutput}</div>}
-          </div>
-        )}
 
         <div className="wifi-networks-list">
           {wifiNetworks.length === 0 && !wifiScanning && (
