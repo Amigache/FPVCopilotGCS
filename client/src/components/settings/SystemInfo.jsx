@@ -8,6 +8,12 @@ function SystemInfo() {
   const [displayInfo, setDisplayInfo] = useState(null)
   const [devices, setDevices] = useState(null)
   const [networkInfo, setNetworkInfo] = useState(null)
+  const [wifiNetworks, setWifiNetworks] = useState([])
+  const [wifiStatus, setWifiStatus] = useState(null)
+  const [wifiScanning, setWifiScanning] = useState(false)
+  const [wifiConnecting, setWifiConnecting] = useState(false)
+  const [selectedNetwork, setSelectedNetwork] = useState(null)
+  const [wifiPassword, setWifiPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
@@ -17,7 +23,14 @@ function SystemInfo() {
     fetchDisplayInfo()
     fetchDevices()
     fetchNetworkInfo()
+    fetchWifiStatus()
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'wifi') {
+      scanWifiNetworks()
+    }
+  }, [activeTab])
 
   const fetchSystemInfo = async () => {
     try {
@@ -59,6 +72,116 @@ function SystemInfo() {
     } catch (err) {
       console.error('Error fetching network info:', err)
     }
+  }
+
+  const fetchWifiStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/wifi/status')
+      const data = await response.json()
+      setWifiStatus(data)
+    } catch (err) {
+      console.error('Error fetching WiFi status:', err)
+    }
+  }
+
+  const scanWifiNetworks = async () => {
+    setWifiScanning(true)
+    try {
+      const response = await fetch('http://localhost:3000/api/wifi/scan')
+      const data = await response.json()
+      setWifiNetworks(data.networks || [])
+    } catch (err) {
+      console.error('Error scanning WiFi:', err)
+    } finally {
+      setWifiScanning(false)
+    }
+  }
+
+  const connectToWifi = async () => {
+    if (!selectedNetwork) return
+    
+    setWifiConnecting(true)
+    try {
+      const response = await fetch('http://localhost:3000/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ssid: selectedNetwork.ssid,
+          password: wifiPassword
+        })
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        alert(`✅ ${data.message}`)
+        setSelectedNetwork(null)
+        setWifiPassword('')
+        fetchWifiStatus()
+        scanWifiNetworks()
+      } else {
+        alert(`❌ ${data.message}`)
+      }
+    } catch (err) {
+      alert(`❌ Error: ${err.message}`)
+    } finally {
+      setWifiConnecting(false)
+    }
+  }
+
+  const disconnectWifi = async () => {
+    if (!confirm('¿Desconectar de la red WiFi actual?')) return
+    
+    try {
+      const response = await fetch('http://localhost:3000/api/wifi/disconnect', {
+        method: 'POST'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        alert(`✅ ${data.message}`)
+        fetchWifiStatus()
+        scanWifiNetworks()
+      } else {
+        alert(`❌ ${data.message}`)
+      }
+    } catch (err) {
+      alert(`❌ Error: ${err.message}`)
+    }
+  }
+
+  const forgetNetwork = async (ssid) => {
+    if (!confirm(`¿Olvidar la red "${ssid}"?`)) return
+    
+    try {
+      const response = await fetch(`http://localhost:3000/api/wifi/forget/${encodeURIComponent(ssid)}`, {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        alert(`✅ ${data.message}`)
+        fetchWifiStatus()
+        scanWifiNetworks()
+      } else {
+        alert(`❌ ${data.message}`)
+      }
+    } catch (err) {
+      alert(`❌ Error: ${err.message}`)
+    }
+  }
+
+  const getSignalIcon = (signal) => {
+    if (signal >= 75) return '📶'
+    if (signal >= 50) return '📶'
+    if (signal >= 25) return '📶'
+    return '📶'
+  }
+
+  const getSignalColor = (signal) => {
+    if (signal >= 75) return '#4caf50'
+    if (signal >= 50) return '#ff9800'
+    if (signal >= 25) return '#ff5722'
+    return '#f44336'
   }
 
   const formatBytes = (bytes) => {
@@ -326,6 +449,119 @@ function SystemInfo() {
     </div>
   )
 
+  const renderWifi = () => (
+    <div className="wifi-manager">
+      {/* Estado actual WiFi */}
+      {wifiStatus?.connected && (
+        <div className="settings-card wifi-current">
+          <h3 className="card-title">📶 Red actual</h3>
+          <div className="wifi-current-info">
+            <div className="wifi-current-details">
+              <div className="wifi-current-ssid">{wifiStatus.ssid}</div>
+              <div className="wifi-current-meta">
+                <span style={{ color: getSignalColor(wifiStatus.signal) }}>
+                  {getSignalIcon(wifiStatus.signal)} {wifiStatus.signal}%
+                </span>
+                <span>🔒 {wifiStatus.security}</span>
+              </div>
+            </div>
+            <button 
+              className="wifi-disconnect-btn"
+              onClick={disconnectWifi}
+            >
+              Desconectar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Redes disponibles */}
+      <div className="settings-card">
+        <div className="card-header-with-action">
+          <h3 className="card-title">📡 Redes disponibles</h3>
+          <button 
+            className="wifi-scan-btn"
+            onClick={scanWifiNetworks}
+            disabled={wifiScanning}
+          >
+            {wifiScanning ? '🔄 Escaneando...' : '🔍 Escanear'}
+          </button>
+        </div>
+
+        <div className="wifi-networks-list">
+          {wifiNetworks.length === 0 && !wifiScanning && (
+            <div className="no-networks">
+              <p>No se encontraron redes. Pulsa "Escanear" para buscar.</p>
+            </div>
+          )}
+
+          {wifiNetworks.map((network, index) => (
+            <div 
+              key={`${network.ssid}-${index}`}
+              className={`wifi-network-item ${network.connected ? 'connected' : ''} ${selectedNetwork?.ssid === network.ssid ? 'selected' : ''}`}
+              onClick={() => !network.connected && setSelectedNetwork(network)}
+            >
+              <div className="wifi-network-info">
+                <div className="wifi-network-ssid">
+                  {network.connected && '✓ '}{network.ssid}
+                </div>
+                <div className="wifi-network-meta">
+                  <span style={{ color: getSignalColor(network.signal) }}>
+                    {getSignalIcon(network.signal)} {network.signal}%
+                  </span>
+                  <span>{network.security !== 'Open' ? '🔒' : '🔓'} {network.security}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Modal de conexión */}
+      {selectedNetwork && (
+        <div className="wifi-connect-modal">
+          <div className="settings-card">
+            <h3 className="card-title">🔑 Conectar a "{selectedNetwork.ssid}"</h3>
+            
+            {selectedNetwork.security !== 'Open' && (
+              <div className="form-group">
+                <label className="form-label">Contraseña:</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={wifiPassword}
+                  onChange={(e) => setWifiPassword(e.target.value)}
+                  placeholder="Introduce la contraseña"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div className="wifi-connect-actions">
+              <button 
+                className="btn-secondary"
+                onClick={() => {
+                  setSelectedNetwork(null)
+                  setWifiPassword('')
+                }}
+                disabled={wifiConnecting}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={connectToWifi}
+                disabled={wifiConnecting || (selectedNetwork.security !== 'Open' && !wifiPassword)}
+              >
+                {wifiConnecting ? '⏳ Conectando...' : '✓ Conectar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="settings-section">
       <h2 className="section-title">{t('systemInfo.title')}</h2>
@@ -358,6 +594,12 @@ function SystemInfo() {
         >
           🌐 {t('systemInfo.network')}
         </button>
+        <button 
+          className={`system-tab ${activeTab === 'wifi' ? 'active' : ''}`}
+          onClick={() => setActiveTab('wifi')}
+        >
+          📶 WiFi
+        </button>
       </div>
 
       <div className="system-content">
@@ -365,6 +607,7 @@ function SystemInfo() {
         {activeTab === 'display' && renderDisplay()}
         {activeTab === 'devices' && renderDevices()}
         {activeTab === 'network' && renderNetwork()}
+        {activeTab === 'wifi' && renderWifi()}
       </div>
 
       <div className="refresh-section">

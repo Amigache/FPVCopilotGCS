@@ -35,6 +35,11 @@ Ground Control Station (GCS) profesional para drones con soporte MAVLink complet
   - Puertos seriales (protocol assignment)
   - Servos y salidas (configuración de funciones)
   - Parámetros avanzados con búsqueda
+- **Gestión WiFi integrada**:
+  - Escaneo de redes disponibles
+  - Conexión a redes WiFi desde la interfaz
+  - Estado de conexión en tiempo real
+  - Desconexión y olvido de redes
 - **Interfaz táctil optimizada**: 
   - Teclado en pantalla para entrada de texto/números
   - Diseño responsive para pantallas touch
@@ -151,6 +156,26 @@ npm install --omit=dev
 
 # Luego copiar la carpeta client/dist desde tu máquina
 ```
+
+### Configuración WiFi (Opcional)
+
+Para habilitar la gestión WiFi desde la interfaz:
+
+```bash
+# Ejecutar el script de configuración
+bash scripts/setup-wifi.sh
+```
+
+Este script:
+- ✅ Instala NetworkManager (necesario para gestión WiFi)
+- ✅ Añade el usuario al grupo `netdev` (permisos WiFi)
+- ✅ Configura permisos necesarios
+
+Después de ejecutar el script, **reinicia la sesión** para aplicar los cambios. La gestión WiFi estará disponible en `Settings > System Info > WiFi`.
+
+📝 Ver [WIFI_SETUP.md](WIFI_SETUP.md) para más detalles sobre configuración y uso.
+
+## 🖥️ Configuración de la Raspberry Pi
 
 El script automáticamente:
 - ✅ Instala X server, **Netsurf** (navegador ultra-ligero) y utilidades mínimas

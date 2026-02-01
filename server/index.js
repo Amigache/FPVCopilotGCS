@@ -310,6 +310,169 @@ app.get('/api/system/network', async (req, res) => {
   }
 });
 
+// WiFi Management Routes
+app.get('/api/wifi/scan', async (req, res) => {
+  try {
+    // Intentar con nmcli primero (NetworkManager)
+    try {
+      const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list');
+      const networks = stdout.trim().split('\n')
+        .filter(line => line)
+        .map(line => {
+          const [ssid, signal, security, inUse] = line.split(':');
+          return {
+            ssid: ssid || 'Hidden Network',
+            signal: parseInt(signal) || 0,
+            security: security || 'Open',
+            connected: inUse === '*'
+          };
+        })
+        .filter(network => network.ssid !== '--')
+        // Eliminar duplicados y ordenar por señal
+        .reduce((acc, curr) => {
+          const exists = acc.find(n => n.ssid === curr.ssid);
+          if (!exists || curr.signal > exists.signal) {
+            return [...acc.filter(n => n.ssid !== curr.ssid), curr];
+          }
+          return acc;
+        }, [])
+        .sort((a, b) => b.signal - a.signal);
+      
+      res.json({ networks, method: 'nmcli' });
+      return;
+    } catch (nmcliError) {
+      // Si nmcli falla, intentar con iwlist
+      try {
+        const { stdout } = await execPromise('sudo iwlist wlan0 scan 2>/dev/null');
+        const networks = [];
+        const cells = stdout.split('Cell ').slice(1);
+        
+        for (const cell of cells) {
+          const ssidMatch = cell.match(/ESSID:"(.+?)"/);
+          const signalMatch = cell.match(/Quality=(\d+)\/(\d+)/);
+          const encryptionMatch = cell.match(/Encryption key:(on|off)/);
+          
+          if (ssidMatch) {
+            const signal = signalMatch ? Math.round((parseInt(signalMatch[1]) / parseInt(signalMatch[2])) * 100) : 0;
+            networks.push({
+              ssid: ssidMatch[1],
+              signal: signal,
+              security: encryptionMatch && encryptionMatch[1] === 'on' ? 'WPA/WPA2' : 'Open',
+              connected: false
+            });
+          }
+        }
+        
+        res.json({ networks: networks.sort((a, b) => b.signal - a.signal), method: 'iwlist' });
+        return;
+      } catch (iwlistError) {
+        throw new Error('No se pudo escanear redes WiFi. Verifica que NetworkManager o wireless-tools estén instalados.');
+      }
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/wifi/status', async (req, res) => {
+  try {
+    // Obtener estado de conexión actual
+    try {
+      const { stdout } = await execPromise('nmcli -t -f ACTIVE,SSID,SIGNAL,SECURITY dev wifi list');
+      const lines = stdout.trim().split('\n');
+      const connected = lines.find(line => line.startsWith('yes:'));
+      
+      if (connected) {
+        const [, ssid, signal, security] = connected.split(':');
+        res.json({
+          connected: true,
+          ssid,
+          signal: parseInt(signal),
+          security
+        });
+      } else {
+        res.json({ connected: false });
+      }
+    } catch {
+      res.json({ connected: false, error: 'No se pudo obtener estado WiFi' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/wifi/connect', async (req, res) => {
+  try {
+    const { ssid, password } = req.body;
+    
+    if (!ssid) {
+      return res.status(400).json({ success: false, message: 'SSID requerido' });
+    }
+
+    // Intentar conectar con nmcli
+    try {
+      let command;
+      if (password) {
+        command = `nmcli dev wifi connect "${ssid}" password "${password}"`;
+      } else {
+        command = `nmcli dev wifi connect "${ssid}"`;
+      }
+      
+      const { stdout, stderr } = await execPromise(command);
+      
+      if (stderr && !stdout) {
+        throw new Error(stderr);
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Conectado a ${ssid}`,
+        output: stdout
+      });
+    } catch (error) {
+      throw new Error(`Error al conectar: ${error.message}`);
+    }
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+app.post('/api/wifi/disconnect', async (req, res) => {
+  try {
+    const { stdout } = await execPromise('nmcli dev disconnect wlan0');
+    res.json({ 
+      success: true, 
+      message: 'Desconectado de WiFi',
+      output: stdout
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+app.delete('/api/wifi/forget/:ssid', async (req, res) => {
+  try {
+    const { ssid } = req.params;
+    const { stdout } = await execPromise(`nmcli connection delete "${ssid}"`);
+    res.json({ 
+      success: true, 
+      message: `Red ${ssid} olvidada`,
+      output: stdout
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
 // Serve static files from React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
