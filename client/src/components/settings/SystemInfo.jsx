@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import TouchCalibration from '../TouchCalibration'
 import './SystemInfo.css'
 
 function SystemInfo() {
@@ -12,15 +11,12 @@ function SystemInfo() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
-  const [showCalibration, setShowCalibration] = useState(false)
-  const [touchDevices, setTouchDevices] = useState([])
 
   useEffect(() => {
     fetchSystemInfo()
     fetchDisplayInfo()
     fetchDevices()
     fetchNetworkInfo()
-    fetchTouchDevices()
   }, [])
 
   const fetchSystemInfo = async () => {
@@ -62,64 +58,6 @@ function SystemInfo() {
       setNetworkInfo(data)
     } catch (err) {
       console.error('Error fetching network info:', err)
-    }
-  }
-
-  const fetchTouchDevices = async () => {
-    try {
-      const response = await fetch('http://localhost:3000/api/system/touch/devices')
-      const data = await response.json()
-      setTouchDevices(data.devices || [])
-    } catch (err) {
-      console.error('Error fetching touch devices:', err)
-    }
-  }
-
-  const handleResetCalibration = async (deviceId) => {
-    if (!window.confirm(t('systemInfo.confirmReset'))) {
-      return
-    }
-
-    try {
-      const response = await fetch('http://localhost:3000/api/system/touch/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId })
-      })
-
-      const result = await response.json()
-      
-      if (result.success) {
-        alert(t('systemInfo.resetSuccess'))
-        fetchTouchDevices()
-      } else {
-        alert(t('systemInfo.resetError') + ': ' + result.error)
-      }
-    } catch (error) {
-      console.error('Error resetting calibration:', error)
-      alert(t('systemInfo.resetError') + ': ' + error.message)
-    }
-  }
-
-  const handleReattachDevice = async (deviceId) => {
-    try {
-      const response = await fetch('http://localhost:3000/api/system/touch/reattach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, masterId: 2 })
-      })
-
-      const result = await response.json()
-      
-      if (result.success) {
-        alert(t('systemInfo.reattachSuccess'))
-        fetchTouchDevices()
-      } else {
-        alert(t('systemInfo.reattachError') + ': ' + result.error)
-      }
-    } catch (error) {
-      console.error('Error reattaching device:', error)
-      alert(t('systemInfo.reattachError') + ': ' + error.message)
     }
   }
 
@@ -282,37 +220,6 @@ function SystemInfo() {
           </div>
         )}
       </div>
-
-      <div className="calibration-section">
-        <h4 className="subsection-title">🎯 {t('systemInfo.touchCalibration')}</h4>
-        <p className="subsection-description">
-          {t('systemInfo.touchCalibrationDescription')}
-        </p>
-        <div className="calibration-buttons">
-          <button 
-            className="btn-calibrate"
-            onClick={() => setShowCalibration(true)}
-          >
-            🎯 {t('systemInfo.calibrateTouch')}
-          </button>
-          {touchDevices.length > 0 && (
-            <>
-              <button 
-                className="btn-reattach"
-                onClick={() => handleReattachDevice(touchDevices[0].id)}
-              >
-                🔗 {t('systemInfo.reattachDevice')}
-              </button>
-              <button 
-                className="btn-reset-calibration"
-                onClick={() => handleResetCalibration(touchDevices[0].id)}
-              >
-                🔄 {t('systemInfo.resetCalibration')}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
 
@@ -473,16 +380,6 @@ function SystemInfo() {
           🔄 {t('systemInfo.refresh')}
         </button>
       </div>
-
-      {showCalibration && (
-        <TouchCalibration 
-          onClose={() => setShowCalibration(false)}
-          onComplete={(matrix) => {
-            setShowCalibration(false)
-            fetchDisplayInfo()
-          }}
-        />
-      )}
     </div>
   )
 }

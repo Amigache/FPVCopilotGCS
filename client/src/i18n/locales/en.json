@@ -587,34 +587,6 @@
     "address": "Address",
     "netmask": "Netmask",
     "mac": "MAC Address",
-    "refresh": "Refresh",
-    "touchCalibration": "Touch Calibration",
-    "touchCalibrationDescription": "Calibrate touchscreen precision to improve response across the entire screen area",
-    "calibrateTouch": "Calibrate Touchscreen",
-    "resetCalibration": "Reset Calibration",
-    "reattachDevice": "Reconnect Device",
-    "confirmReset": "Are you sure you want to reset the touch calibration? This will restore default values.",
-    "resetSuccess": "Calibration reset successfully",
-    "resetError": "Error resetting calibration",
-    "reattachSuccess": "Touch device reconnected successfully",
-    "reattachError": "Error reconnecting device",
-    "resetSuccess": "Calibration reset successfully",
-    "resetError": "Error resetting calibration"
-  },
-  "touchCalibration": {
-    "selectDevice": "Select Touch Device",
-    "selectDeviceDescription": "Choose the touch device you want to calibrate",
-    "noDeviceSelected": "Please select a touch device",
-    "noDevices": "No compatible touch devices found",
-    "currentMatrix": "Current matrix",
-    "startCalibration": "Start Calibration",
-    "tapTarget": "Tap the Target",
-    "point": "Point",
-    "processing": "Processing Calibration...",
-    "processingDescription": "Calculating and applying transformation matrix",
-    "complete": "Calibration Complete",
-    "completeDescription": "Calibration has been applied and saved successfully. Changes will be applied automatically on restart.",
-    "calibrationError": "Calibration error",
-    "saveError": "Error saving calibration"
+    "refresh": "Refresh"
   }
 }

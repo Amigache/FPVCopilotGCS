@@ -585,34 +585,6 @@
     "address": "Dirección",
     "netmask": "Máscara de Red",
     "mac": "Dirección MAC",
-    "refresh": "Actualizar",
-    "touchCalibration": "Calibración Táctil",
-    "touchCalibrationDescription": "Calibra la precisión de la pantalla táctil para mejorar la respuesta en toda el área de la pantalla",
-    "calibrateTouch": "Calibrar Pantalla Táctil",
-    "resetCalibration": "Resetear Calibración",
-    "reattachDevice": "Reconectar Dispositivo",
-    "confirmReset": "¿Estás seguro de resetear la calibración táctil? Esto restaurará los valores predeterminados.",
-    "resetSuccess": "Calibración reseteada correctamente",
-    "resetError": "Error al resetear la calibración",
-    "reattachSuccess": "Dispositivo táctil reconectado correctamente",
-    "reattachError": "Error al reconectar el dispositivo",
-    "resetSuccess": "Calibración reseteada correctamente",
-    "resetError": "Error al resetear la calibración"
-  },
-  "touchCalibration": {
-    "selectDevice": "Seleccionar Dispositivo Táctil",
-    "selectDeviceDescription": "Elige el dispositivo táctil que deseas calibrar",
-    "noDeviceSelected": "Por favor selecciona un dispositivo táctil",
-    "noDevices": "No se encontraron dispositivos táctiles compatibles",
-    "currentMatrix": "Matriz actual",
-    "startCalibration": "Iniciar Calibración",
-    "tapTarget": "Toca el Objetivo",
-    "point": "Punto",
-    "processing": "Procesando Calibración...",
-    "processingDescription": "Calculando y aplicando la matriz de transformación",
-    "complete": "Calibración Completa",
-    "completeDescription": "La calibración se ha aplicado y guardado correctamente. Los cambios se aplicarán automáticamente al reiniciar.",
-    "calibrationError": "Error en la calibración",
-    "saveError": "Error al guardar la calibración"
+    "refresh": "Actualizar"
   }
 }
