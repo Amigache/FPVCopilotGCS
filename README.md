@@ -1,6 +1,6 @@
 # FPV Copilot GCS
 
-Ground Control Station (GCS) profesional para drones con soporte MAVLink completo, diseñado para ejecutarse en Raspberry Pi Zero con pantalla HDMI fullscreen (modo kiosk). Interfaz moderna estilo Android con telemetría en tiempo real.
+Ground Control Station (GCS) profesional para drones con soporte MAVLink completo, diseñado para ejecutarse en Raspberry Pi Zero. Interfaz moderna estilo Android con telemetría en tiempo real.
 
 ## ✨ Características
 
@@ -44,7 +44,6 @@ Ground Control Station (GCS) profesional para drones con soporte MAVLink complet
   - Reconexión automática al iniciar
   - Reintento ante desconexiones
   - Gestión de conexiones guardadas
-- **Modo kiosk**: Ejecución fullscreen sin escritorio en Raspberry Pi
 
 ### 🎨 Interfaz de usuario moderna
 
@@ -151,27 +150,6 @@ cd FPVCopilotGCS
 npm install --omit=dev
 
 # Luego copiar la carpeta client/dist desde tu máquina
-```
-
-## 🖥️ Configuración modo Kiosk (Fullscreen sin escritorio)
-
-Para ejecutar la aplicación en fullscreen por HDMI sin entorno de escritorio:
-
-### Configuración automática (recomendado)
-
-En la Raspberry Pi:
-```bash
-# Copiar el script de configuración
-# (desde tu máquina: scp scripts/setup-kiosk-mode.sh usuario@pi:~/)
-
-# Ejecutar el script
-bash ~/setup-kiosk-mode.sh
-
-# Asegurarte de tener el build del frontend
-# (desde tu máquina: scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/)
-
-# Reiniciar
-sudo reboot
 ```
 
 El script automáticamente:
@@ -286,8 +264,6 @@ Las conexiones se configuran en `Settings > Connections`
 
 ```
 FPVCopilotGCS/
-├── scripts/
-│   └── setup-kiosk-mode.sh       # Script de configuración kiosk
 ├── server/
 │   ├── index.js                  # Servidor Express
 │   ├── mavlink-parser.js         # Parser MAVLink

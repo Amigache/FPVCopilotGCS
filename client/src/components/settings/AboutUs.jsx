@@ -121,7 +121,7 @@ function AboutUs() {
           </div>
           <div className="info-row">
             <span className="info-label">{t('about.browser')}:</span>
-            <span className="info-value">Chromium (Modo Kiosk)</span>
+            <span className="info-value">Chromium</span>
           </div>
         </div>
       </div>
