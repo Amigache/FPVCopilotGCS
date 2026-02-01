@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import './Settings.css'
 import General from './settings/General'
 import Connections from './settings/Connections'
+import SystemInfo from './settings/SystemInfo'
 import AboutUs from './settings/AboutUs'
 
 function Settings({ onClose }) {
@@ -12,6 +13,7 @@ function Settings({ onClose }) {
   const menuItems = [
     { id: 'general', label: t('settings.general'), icon: '🌐' },
     { id: 'connections', label: t('settings.connections'), icon: '🔌' },
+    { id: 'system', label: t('settings.system'), icon: '💻' },
     { id: 'about', label: t('settings.about'), icon: 'ℹ️' }
   ]
 
@@ -21,6 +23,8 @@ function Settings({ onClose }) {
         return <General />
       case 'connections':
         return <Connections />
+      case 'system':
+        return <SystemInfo />
       case 'about':
         return <AboutUs />
       default:
