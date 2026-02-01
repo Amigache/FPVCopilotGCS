@@ -321,10 +321,18 @@ app.get('/api/system/touch/devices', async (req, res) => {
       const lines = stdout.split('\n');
       
       for (const line of lines) {
-        // Buscar dispositivos táctiles/pointer
-        if (line.toLowerCase().includes('touch') || 
-            line.toLowerCase().includes('touchscreen') ||
-            line.toLowerCase().includes('pointer')) {
+        const lineLower = line.toLowerCase();
+        
+        // Buscar dispositivos táctiles (ampliar búsqueda para incluir eGalax y otros)
+        const isTouchDevice = lineLower.includes('touch') || 
+                             lineLower.includes('touchscreen') ||
+                             lineLower.includes('pointer') ||
+                             lineLower.includes('egalax') ||
+                             lineLower.includes('galax') ||
+                             lineLower.includes('touchpanel') ||
+                             lineLower.includes('digitizer');
+        
+        if (isTouchDevice) {
           // Extraer ID y nombre
           const idMatch = line.match(/id=(\d+)/);
           const nameMatch = line.match(/↳?\s*(.+?)\s+id=/);
@@ -336,20 +344,20 @@ app.get('/api/system/touch/devices', async (req, res) => {
             // Obtener propiedades del dispositivo
             try {
               const { stdout: props } = await execPromise(`xinput list-props ${id}`);
-              const hasMatrix = props.includes('Coordinate Transformation Matrix');
               
-              if (hasMatrix) {
-                // Extraer matriz actual
-                const matrixMatch = props.match(/Coordinate Transformation Matrix[^:]*:\s*([\d\.\-\s,]+)/);
-                let matrix = null;
-                if (matrixMatch) {
-                  matrix = matrixMatch[1].trim().split(/[,\s]+/).map(parseFloat);
-                }
-                
-                devices.push({ id, name, matrix });
+              // Extraer matriz actual si existe
+              const matrixMatch = props.match(/Coordinate Transformation Matrix[^:]*:\s*([\d\.\-\s,]+)/);
+              let matrix = null;
+              if (matrixMatch) {
+                matrix = matrixMatch[1].trim().split(/[,\s]+/).map(parseFloat);
               }
+              
+              // Añadir dispositivo incluso si no tiene matriz (la crearemos al calibrar)
+              devices.push({ id, name, matrix });
             } catch (propError) {
               console.error(`Error getting props for device ${id}:`, propError);
+              // Añadir dispositivo aunque falle la lectura de propiedades
+              devices.push({ id, name, matrix: null });
             }
           }
         }
