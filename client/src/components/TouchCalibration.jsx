@@ -10,6 +10,7 @@ function TouchCalibration({ onClose, onComplete }) {
   const [devices, setDevices] = useState([])
   const [selectedDevice, setSelectedDevice] = useState(null)
   const [processing, setProcessing] = useState(false)
+  const [containerReady, setContainerReady] = useState(false)
   const containerRef = useRef(null)
 
   // Definir puntos de calibración (porcentajes de la pantalla)
@@ -24,6 +25,13 @@ function TouchCalibration({ onClose, onComplete }) {
   useEffect(() => {
     fetchDevices()
   }, [])
+
+  useEffect(() => {
+    // Asegurar que el contenedor esté listo cuando se muestra la pantalla de calibración
+    if (step === 1 && containerRef.current) {
+      setContainerReady(true)
+    }
+  }, [step])
 
   const fetchDevices = async () => {
     try {
@@ -257,13 +265,7 @@ function TouchCalibration({ onClose, onComplete }) {
 
   const renderCalibrationScreen = () => {
     const point = targetPoints[currentPoint]
-    const rect = containerRef.current?.getBoundingClientRect()
     
-    if (!rect) return null
-
-    const pixelX = point.x * rect.width
-    const pixelY = point.y * rect.height
-
     return (
       <div 
         className="calibration-fullscreen"
@@ -276,17 +278,19 @@ function TouchCalibration({ onClose, onComplete }) {
           <p>{t('touchCalibration.point')} {currentPoint + 1} / {targetPoints.length}</p>
         </div>
 
-        <div 
-          className="calibration-target"
-          style={{
-            left: `${pixelX}px`,
-            top: `${pixelY}px`
-          }}
-        >
-          <div className="target-ring"></div>
-          <div className="target-ring"></div>
-          <div className="target-center"></div>
-        </div>
+        {containerReady && (
+          <div 
+            className="calibration-target"
+            style={{
+              left: `${point.x * 100}%`,
+              top: `${point.y * 100}%`
+            }}
+          >
+            <div className="target-ring"></div>
+            <div className="target-ring"></div>
+            <div className="target-center"></div>
+          </div>
+        )}
 
         <button className="btn-cancel-calibration" onClick={() => setStep(0)}>
           ✕ {t('common.cancel')}

@@ -194,8 +194,10 @@
 
 .calibration-target {
   position: absolute;
-  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
   z-index: 5;
+  pointer-events: none;
 }
 
 .target-ring {

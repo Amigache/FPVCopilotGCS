@@ -363,6 +363,12 @@ app.get('/api/system/touch/devices', async (req, res) => {
           
           console.log(`  Device found: "${name}" (ID: ${id}, isTouchDevice: ${isTouchDevice})`);
           
+          // Filtrar dispositivos UNKNOWN o duplicados innecesarios
+          if (lineLower.includes('unknown') || name.toLowerCase().includes('unknown')) {
+            console.log(`  ⚠️ Skipping UNKNOWN device`);
+            continue;
+          }
+          
           if (isTouchDevice) {
             // Obtener propiedades del dispositivo
             try {
