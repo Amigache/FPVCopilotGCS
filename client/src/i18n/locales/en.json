@@ -369,14 +369,14 @@
     "description": "Information about the project and development team",
     "version": "Version",
     "descriptionTitle": "Description",
-    "descriptionText": "FPV Copilot GCS is a ground control system designed specifically for Raspberry Pi Zero. It provides an intuitive Android-style interface for real-time monitoring and control of FPV drones.",
+    "descriptionText": "FPV Copilot GCS is a ground control system designed for Linux embedded systems. It provides an intuitive Android-style interface for real-time monitoring and control of FPV drones.",
     "featuresTitle": "Features",
     "featuresList": {
       "interface": "Android-style interface optimized for touchscreens",
       "maps": "Real-time map visualization with OpenStreetMap",
       "telemetry": "Telemetry monitoring (signal, battery, GPS)",
       "connections": "Multiple connections (Serial, WiFi)",
-      "optimized": "Optimized for Raspberry Pi Zero"
+      "optimized": "Optimized for Linux embedded systems"
     },
     "technologiesTitle": "Technologies",
     "systemInfoTitle": "System Information",

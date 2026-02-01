@@ -1,6 +1,6 @@
 # FPV Copilot GCS
 
-Ground Control Station (GCS) profesional para drones con soporte MAVLink completo, diseñado para ejecutarse en Raspberry Pi Zero. Interfaz moderna estilo Android con telemetría en tiempo real.
+Ground Control Station (GCS) profesional para drones con soporte MAVLink completo. Interfaz moderna estilo Android con telemetría en tiempo real, optimizada para sistemas Linux embebidos.
 
 ## ✨ Características
 
@@ -92,18 +92,18 @@ Ground Control Station (GCS) profesional para drones con soporte MAVLink complet
 - Node.js 18.x o superior
 - npm 9.x o superior
 
-### ⚠️ Limitación importante de Raspberry Pi Zero
+### ⚠️ Limitación importante en sistemas con procesadores antiguos
 
-La Raspberry Pi Zero tiene un procesador **ARMv6** que **NO puede ejecutar Vite** (servidor de desarrollo):
+Sistemas con procesadores **ARMv6** (como dispositivos muy antiguos) **NO pueden ejecutar Vite** (servidor de desarrollo):
 
-- ❌ **NO puedes** ejecutar `npm run dev` en la Pi Zero
+- ❌ **NO puedes** ejecutar `npm run dev` en estos sistemas
 - ✅ **SÍ puedes** ejecutar en modo producción
 - 📦 El **build debe hacerse** en tu máquina de desarrollo (x64/ARM64)
 
 **Flujo de trabajo recomendado:**
 1. Desarrolla en tu máquina con `npm run dev`
 2. Haz el build con `npm run build`
-3. Copia los archivos a la Pi Zero
+3. Copia los archivos al sistema embebido
 4. Ejecuta en modo producción
 
 ## 🚀 Instalación
@@ -126,7 +126,7 @@ Esto iniciará:
 - **Backend**: `http://localhost:3000`
 - **Frontend**: `http://localhost:5173` (con hot-reload)
 
-### En Raspberry Pi Zero
+### En sistema Linux embebido
 
 **Opción 1: Copiar archivos manualmente**
 
@@ -135,11 +135,11 @@ En tu máquina de desarrollo:
 # Hacer el build
 npm run build
 
-# Copiar a la Pi (ajusta la IP)
+# Copiar a la placa (ajusta la IP)
 scp -r server client/dist package*.json usuario@192.168.1.100:~/FPVCopilotGCS/
 ```
 
-En la Raspberry Pi:
+En el sistema Linux:
 ```bash
 cd ~/FPVCopilotGCS
 npm install --omit=dev
@@ -149,7 +149,7 @@ NODE_ENV=production npm start
 **Opción 2: Clonar y hacer build en otra máquina, luego copiar**
 
 ```bash
-# En la Pi, solo clonar (sin build)
+# En la placa, solo clonar (sin build)
 git clone https://github.com/Amigache/FPVCopilotGCS.git
 cd FPVCopilotGCS
 npm install --omit=dev
@@ -175,7 +175,7 @@ Después de ejecutar el script, **reinicia la sesión** para aplicar los cambios
 
 📝 Ver [WIFI_SETUP.md](WIFI_SETUP.md) para más detalles sobre configuración y uso.
 
-## 🖥️ Configuración de la Raspberry Pi
+## 🖥️ Configuración del sistema Linux
 
 El script automáticamente:
 - ✅ Instala X server, **Netsurf** (navegador ultra-ligero) y utilidades mínimas
@@ -185,7 +185,7 @@ El script automáticamente:
 - ✅ Desactiva screensaver y ahorro de energía
 - ✅ Oculta el cursor del mouse
 
-**Nota**: Se usa **Netsurf** porque es el navegador más ligero disponible para Raspberry Pi Zero (ARMv6, 512MB RAM). Chromium es demasiado pesado y no funciona correctamente.
+**Nota**: Se usa **Netsurf** como opción ligera para sistemas con recursos limitados. En sistemas con más recursos, Chromium o Firefox funcionan perfectamente.
 
 ### Configuración manual
 
@@ -195,7 +195,7 @@ sudo apt update
 sudo apt install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit netsurf-gtk unclutter
 ```
 
-**Nota**: Se usa Netsurf porque es ultra-ligero y funciona en Pi Zero. Chromium/Midori son demasiado pesados.
+**Nota**: Se usa Netsurf como opción ultra-ligera para sistemas embebidos. En sistemas con más recursos, usa Chromium o Firefox.
 
 2. **Crear archivo `.xinitrc`:**
 ```bash
@@ -323,7 +323,7 @@ FPVCopilotGCS/
 
 ## 🔍 Solución de problemas
 
-### El servidor no inicia en la Pi
+### El servidor no inicia en la placa
 ```bash
 # Verificar logs
 cat ~/fpv-gcs.log
@@ -332,13 +332,13 @@ cat ~/fpv-gcs.log
 sudo lsof -i :3000
 ```
 
-### No se ven los cambios en la Pi
+### No se ven los cambios en la placa
 ```bash
 # Reconstruir en tu máquina
 npm run build
 
-# Copiar client/dist a la Pi
-scp -r client/dist usuario@pi:~/FPVCopilotGCS/client/
+# Copiar client/dist a la placa
+scp -r client/dist usuario@BOARD_IP:~/FPVCopilotGCS/client/
 ```
 
 ### Pantalla en negro al iniciar
@@ -356,7 +356,7 @@ cat /etc/systemd/system/getty@tty1.service.d/autologin.conf
 DISPLAY=:0 netsurf-gtk http://localhost:3000 &
 ```
 
-**Nota importante sobre Pi Zero**: La Raspberry Pi Zero tiene solo 512MB de RAM y un procesador ARMv6. Los navegadores modernos como Chromium pueden no funcionar correctamente. Si Netsurf tampoco funciona, considera usar una Raspberry Pi más potente (Pi 3/4/5) o acceder a la aplicación desde otro dispositivo.
+**Nota importante sobre sistemas limitados**: En sistemas con menos de 512MB de RAM y procesadores antiguos, los navegadores modernos como Chromium pueden no funcionar correctamente. Si Netsurf tampoco funciona, considera actualizar el hardware o acceder a la aplicación desde otro dispositivo en la red.
 
 ### La aplicación no inicia automáticamente
 ```bash

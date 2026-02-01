@@ -1,7 +1,7 @@
 {
   "name": "fpv-copilot-gcs",
   "version": "1.0.0",
-  "description": "FPV Copilot Ground Control Station for Raspberry Pi Zero",
+  "description": "FPV Copilot Ground Control Station for Linux embedded systems",
   "main": "server/index.js",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
   },
   "keywords": [
     "fpv",
-    "raspberry-pi",
+    "linux",
+    "embedded",
     "ground-control-station"
   ],
   "author": "Amigache",

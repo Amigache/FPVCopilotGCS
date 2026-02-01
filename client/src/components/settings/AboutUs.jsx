@@ -113,11 +113,11 @@ function AboutUs() {
         <div className="system-info">
           <div className="info-row">
             <span className="info-label">{t('about.platform')}:</span>
-            <span className="info-value">Raspberry Pi Zero</span>
+            <span className="info-value">Linux System</span>
           </div>
           <div className="info-row">
             <span className="info-label">{t('about.os')}:</span>
-            <span className="info-value">Raspberry Pi OS</span>
+            <span className="info-value">Linux (Ubuntu/Debian)</span>
           </div>
           <div className="info-row">
             <span className="info-label">{t('about.browser')}:</span>

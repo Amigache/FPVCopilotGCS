@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNotification } from '../../contexts/NotificationContext'
 import OnScreenKeyboard from '../OnScreenKeyboard'
+import UnifiedModal from '../UnifiedModal'
 import './SystemInfo.css'
 
 function SystemInfo() {
   const { t } = useTranslation()
+  const notify = useNotification()
   const [systemInfo, setSystemInfo] = useState(null)
   const [displayInfo, setDisplayInfo] = useState(null)
   const [devices, setDevices] = useState(null)
@@ -19,6 +22,7 @@ function SystemInfo() {
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', initialValue: '' })
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: '', ssid: '' })
 
   useEffect(() => {
     fetchSystemInfo()
@@ -117,24 +121,22 @@ function SystemInfo() {
       const data = await response.json()
       
       if (data.success) {
-        alert(`✅ ${data.message}`)
+        notify.success(data.message)
         setSelectedNetwork(null)
         setWifiPassword('')
         fetchWifiStatus()
         scanWifiNetworks()
       } else {
-        alert(`❌ ${data.message}`)
+        notify.error(data.message)
       }
     } catch (err) {
-      alert(`❌ Error: ${err.message}`)
+      notify.error(`Error: ${err.message}`)
     } finally {
       setWifiConnecting(false)
     }
   }
 
   const disconnectWifi = async () => {
-    if (!confirm('¿Desconectar de la red WiFi actual?')) return
-    
     try {
       const response = await fetch('http://localhost:3000/api/wifi/disconnect', {
         method: 'POST'
@@ -142,20 +144,19 @@ function SystemInfo() {
       const data = await response.json()
       
       if (data.success) {
-        alert(`✅ ${data.message}`)
+        notify.success(data.message)
         fetchWifiStatus()
         scanWifiNetworks()
       } else {
-        alert(`❌ ${data.message}`)
+        notify.error(data.message)
       }
     } catch (err) {
-      alert(`❌ Error: ${err.message}`)
+      notify.error(`Error: ${err.message}`)
     }
+    setConfirmModal({ isOpen: false, type: '', ssid: '' })
   }
 
   const forgetNetwork = async (ssid) => {
-    if (!confirm(`¿Olvidar la red "${ssid}"?`)) return
-    
     try {
       const response = await fetch(`http://localhost:3000/api/wifi/forget/${encodeURIComponent(ssid)}`, {
         method: 'DELETE'
@@ -163,15 +164,16 @@ function SystemInfo() {
       const data = await response.json()
       
       if (data.success) {
-        alert(`✅ ${data.message}`)
+        notify.success(data.message)
         fetchWifiStatus()
         scanWifiNetworks()
       } else {
-        alert(`❌ ${data.message}`)
+        notify.error(data.message)
       }
     } catch (err) {
-      alert(`❌ Error: ${err.message}`)
+      notify.error(`Error: ${err.message}`)
     }
+    setConfirmModal({ isOpen: false, type: '', ssid: '' })
   }
 
   const getSignalIcon = (signal) => {
@@ -484,7 +486,7 @@ function SystemInfo() {
             </div>
             <button 
               className="wifi-disconnect-btn"
-              onClick={disconnectWifi}
+              onClick={() => setConfirmModal({ isOpen: true, type: 'disconnect', ssid: wifiStatus.ssid })}
             >
               {t('systemInfo.wifiDisconnect')}
             </button>
@@ -626,6 +628,7 @@ function SystemInfo() {
         {activeTab === 'devices' && renderDevices()}
         {activeTab === 'network' && renderNetwork()}
         {activeTab === 'wifi' && renderWifi()}
+      </div>
 
       <OnScreenKeyboard
         isOpen={keyboard.isOpen}
@@ -635,7 +638,39 @@ function SystemInfo() {
         initialValue={keyboard.initialValue}
         keyboardType="text"
       />
-      </div>
+
+      <UnifiedModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, type: '', ssid: '' })}
+        title={confirmModal.type === 'disconnect' ? t('systemInfo.wifiDisconnect') : t('systemInfo.wifiForget')}
+        message={
+          confirmModal.type === 'disconnect'
+            ? t('systemInfo.wifiDisconnectConfirm')
+            : `${t('systemInfo.wifiForgetConfirm')} "${confirmModal.ssid}"?`
+        }
+        type="warning"
+        buttons={[
+          {
+            label: t('systemInfo.cancel'),
+            onClick: () => setConfirmModal({ isOpen: false, type: '', ssid: '' }),
+            variant: 'cancel'
+          },
+          {
+            label: t('modal.confirm'),
+            onClick: () => {
+              if (confirmModal.type === 'disconnect') {
+                disconnectWifi()
+              } else if (confirmModal.type === 'forget') {
+                forgetNetwork(confirmModal.ssid)
+              }
+            },
+            variant: 'danger'
+          }
+        ]}
+      />
+    </div>
+  )
+}
     </div>
   )
 }
