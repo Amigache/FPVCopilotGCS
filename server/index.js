@@ -318,8 +318,8 @@ app.get('/api/wifi/scan', async (req, res) => {
       // Primero forzar un rescan (requiere sudo)
       try {
         await execPromise('sudo nmcli dev wifi rescan');
-        // Esperar un poco para que complete el escaneo
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Esperar suficiente tiempo para que complete el escaneo
+        await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (rescanError) {
         // Ignorar errores de rescan, a veces falla pero el list funciona igual
         console.error('Rescan error:', rescanError.message);

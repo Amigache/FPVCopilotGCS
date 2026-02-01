@@ -28,7 +28,8 @@ function SystemInfo() {
 
   useEffect(() => {
     if (activeTab === 'wifi') {
-      scanWifiNetworks()
+      // Solo obtener estado, no escanear automáticamente
+      fetchWifiStatus()
     }
   }, [activeTab])
 
