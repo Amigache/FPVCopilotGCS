@@ -316,16 +316,13 @@ app.get('/api/wifi/scan', async (req, res) => {
     // Intentar con nmcli primero (NetworkManager)
     try {
       const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list');
-      console.log('WiFi scan output:', stdout);
       
       const lines = stdout.trim().split('\n');
-      console.log('Total lines:', lines.length);
       
       const networks = lines
         .filter(line => line && line.trim())
         .map((line, index) => {
           const parts = line.split(':');
-          console.log(`Line ${index}:`, parts);
           const [ssid, signal, security, inUse] = parts;
           return {
             ssid: ssid || 'Hidden Network',
@@ -345,8 +342,15 @@ app.get('/api/wifi/scan', async (req, res) => {
         }, [])
         .sort((a, b) => b.signal - a.signal);
       
-      console.log('Processed networks:', networks.length);
-      res.json({ networks, method: 'nmcli', debug: { totalLines: lines.length, processedNetworks: networks.length } });
+      res.json({ 
+        networks, 
+        method: 'nmcli', 
+        debug: { 
+          rawOutput: stdout.substring(0, 500), // Primeros 500 caracteres
+          totalLines: lines.length, 
+          processedNetworks: networks.length 
+        } 
+      });
       return;
     } catch (nmcliError) {
       // Si nmcli falla, intentar con iwlist
