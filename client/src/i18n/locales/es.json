@@ -114,6 +114,8 @@
       "type": "Tipo de Conexión",
       "serialPort": "Puerto Serial",
       "selectSerialPort": "Seleccionar puerto del navegador",
+      "detectingPorts": "Detectando puertos...",
+      "refreshPorts": "Refrescar puertos",
       "baudrate": "Baudrate",
       "mode": "Modo",
       "client": "Cliente",

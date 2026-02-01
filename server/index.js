@@ -256,8 +256,32 @@ app.get('/api/system/devices', async (req, res) => {
 
     // Puertos seriales
     try {
-      const { stdout: serialPorts } = await execPromise('ls -1 /dev/tty{USB,ACM,S}* 2>/dev/null || echo "No serial devices"');
-      devices.serial = serialPorts.trim().split('\n').filter(line => line && !line.includes('No serial'));
+      const { stdout: serialPorts } = await execPromise('ls -1 /dev/tty{USB,ACM,AMA,S}* 2>/dev/null || true');
+      const ports = serialPorts.trim().split('\n').filter(p => p && p.startsWith('/dev/'));
+      
+      if (ports.length > 0) {
+        const portsWithInfo = await Promise.all(ports.map(async (port) => {
+          try {
+            const { stdout: info } = await execPromise(`udevadm info --name=${port} 2>/dev/null || true`);
+            const vendor = (info.match(/ID_VENDOR=(.+)/) || [])[1] || '';
+            const model = (info.match(/ID_MODEL=(.+)/) || [])[1] || '';
+            const vendorId = (info.match(/ID_VENDOR_ID=(.+)/) || [])[1] || '';
+            const modelId = (info.match(/ID_MODEL_ID=(.+)/) || [])[1] || '';
+            
+            if (vendor && model) {
+              return `${port} (${vendor} ${model})`;
+            } else if (vendorId && modelId) {
+              return `${port} (USB ${vendorId}:${modelId})`;
+            }
+            return port;
+          } catch {
+            return port;
+          }
+        }));
+        devices.serial = portsWithInfo;
+      } else {
+        devices.serial = [];
+      }
     } catch (error) {
       devices.serial = [];
     }
@@ -308,6 +332,57 @@ app.get('/api/system/network', async (req, res) => {
     res.json(networkInfo);
   } catch (error) {
     res.status(500).json({ error: 'Error obteniendo información de red' });
+  }
+});
+
+// Serial Ports Detection Route
+app.get('/api/serial/ports', async (req, res) => {
+  try {
+    const { stdout } = await execPromise('ls -1 /dev/tty{USB,ACM,AMA,S}* 2>/dev/null || true');
+    const ports = stdout.trim().split('\n').filter(p => p);
+    
+    const portsInfo = await Promise.all(ports.map(async (port) => {
+      try {
+        const { stdout: info } = await execPromise(`udevadm info --name=${port} 2>/dev/null || true`);
+        const vendor = (info.match(/ID_VENDOR=(.+)/) || [])[1] || '';
+        const model = (info.match(/ID_MODEL=(.+)/) || [])[1] || '';
+        const serial = (info.match(/ID_SERIAL_SHORT=(.+)/) || [])[1] || '';
+        const vendorId = (info.match(/ID_VENDOR_ID=(.+)/) || [])[1] || '';
+        const modelId = (info.match(/ID_MODEL_ID=(.+)/) || [])[1] || '';
+        
+        let description = port;
+        if (vendor && model) {
+          description = `${port} (${vendor} ${model})`;
+        } else if (vendorId && modelId) {
+          description = `${port} (USB ${vendorId}:${modelId})`;
+        }
+        
+        return {
+          path: port,
+          description,
+          vendor,
+          model,
+          serial,
+          vendorId,
+          modelId
+        };
+      } catch (err) {
+        return {
+          path: port,
+          description: port,
+          vendor: '',
+          model: '',
+          serial: '',
+          vendorId: '',
+          modelId: ''
+        };
+      }
+    }));
+    
+    res.json({ success: true, ports: portsInfo });
+  } catch (error) {
+    console.error('Error listando puertos seriales:', error);
+    res.json({ success: true, ports: [] });
   }
 });
 

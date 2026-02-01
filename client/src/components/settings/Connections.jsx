@@ -16,6 +16,8 @@ function Connections() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [activeConnection, setActiveConnection] = useState(null) // ID de la conexión activa
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', fieldKey: '', initialValue: '', keyboardType: 'text' })
+  const [serialPorts, setSerialPorts] = useState([])
+  const [loadingPorts, setLoadingPorts] = useState(false)
   const [newConnection, setNewConnection] = useState({
     name: '',
     type: 'serial',
@@ -232,6 +234,39 @@ function Connections() {
     }
   }
 
+  // Cargar puertos seriales disponibles
+  const loadSerialPorts = async () => {
+    setLoadingPorts(true)
+    try {
+      const response = await fetch('/api/serial/ports')
+      const data = await response.json()
+      if (data.success && data.ports.length > 0) {
+        setSerialPorts(data.ports)
+        // Si hay puertos disponibles y no hay uno seleccionado, usar el primero
+        if (!newConnection.config.port && data.ports.length > 0) {
+          setNewConnection({
+            ...newConnection,
+            config: { ...newConnection.config, port: data.ports[0].path }
+          })
+        }
+      } else {
+        setSerialPorts([])
+      }
+    } catch (error) {
+      console.error('Error cargando puertos seriales:', error)
+      setSerialPorts([])
+    } finally {
+      setLoadingPorts(false)
+    }
+  }
+
+  // Cargar puertos cuando se abre el modal de añadir conexión serial
+  useEffect(() => {
+    if (showAddModal && newConnection.type === 'serial') {
+      loadSerialPorts()
+    }
+  }, [showAddModal, newConnection.type])
+
   const renderConnectionForm = () => {
     switch (newConnection.type) {
       case 'serial':
@@ -247,18 +282,32 @@ function Connections() {
                     ...newConnection,
                     config: { ...newConnection.config, port: e.target.value }
                   })}
+                  disabled={loadingPorts}
                 >
-                  <option>/dev/ttyUSB0</option>
-                  <option>/dev/ttyUSB1</option>
-                  <option>/dev/ttyAMA0</option>
+                  {loadingPorts ? (
+                    <option>{t('connections.form.detectingPorts')}</option>
+                  ) : serialPorts.length > 0 ? (
+                    serialPorts.map(port => (
+                      <option key={port.path} value={port.path}>
+                        {port.description}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option>/dev/ttyUSB0</option>
+                      <option>/dev/ttyACM0</option>
+                      <option>/dev/ttyAMA0</option>
+                    </>
+                  )}
                 </select>
                 <button 
                   type="button"
                   className="btn-select-port"
-                  onClick={handleSelectSerialPort}
-                  title={t('connections.form.selectSerialPort')}
+                  onClick={loadSerialPorts}
+                  disabled={loadingPorts}
+                  title={t('connections.form.refreshPorts')}
                 >
-                  🔍
+                  {loadingPorts ? '⟳' : '🔄'}
                 </button>
               </div>
             </div>
