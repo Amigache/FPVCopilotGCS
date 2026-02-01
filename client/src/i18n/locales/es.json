@@ -7,7 +7,9 @@
     "savedSuccessfully": "Guardado exitosamente",
     "errorSaving": "Error al guardar",
     "errorLoading": "Error al cargar la configuración",
-    "parametersRejected": "{{count}} parámetro(s) rechazado(s) por el vehículo"
+    "parametersRejected": "{{count}} parámetro(s) rechazado(s) por el vehículo",
+    "cancel": "Cancelar",
+    "close": "Cerrar"
   },
   "reconnect": {
     "noSavedConnections": "No hay conexiones guardadas. Conecta manualmente desde Conexiones.",
@@ -583,6 +585,25 @@
     "address": "Dirección",
     "netmask": "Máscara de Red",
     "mac": "Dirección MAC",
-    "refresh": "Actualizar"
+    "refresh": "Actualizar",
+    "touchCalibration": "Calibración Táctil",
+    "touchCalibrationDescription": "Calibra la precisión de la pantalla táctil para mejorar la respuesta en toda el área de la pantalla",
+    "calibrateTouch": "Calibrar Pantalla Táctil"
+  },
+  "touchCalibration": {
+    "selectDevice": "Seleccionar Dispositivo Táctil",
+    "selectDeviceDescription": "Elige el dispositivo táctil que deseas calibrar",
+    "noDeviceSelected": "Por favor selecciona un dispositivo táctil",
+    "noDevices": "No se encontraron dispositivos táctiles compatibles",
+    "currentMatrix": "Matriz actual",
+    "startCalibration": "Iniciar Calibración",
+    "tapTarget": "Toca el Objetivo",
+    "point": "Punto",
+    "processing": "Procesando Calibración...",
+    "processingDescription": "Calculando y aplicando la matriz de transformación",
+    "complete": "Calibración Completa",
+    "completeDescription": "La calibración se ha aplicado y guardado correctamente. Los cambios se aplicarán automáticamente al reiniciar.",
+    "calibrationError": "Error en la calibración",
+    "saveError": "Error al guardar la calibración"
   }
 }

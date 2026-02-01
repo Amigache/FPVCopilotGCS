@@ -7,7 +7,9 @@
     "savedSuccessfully": "Saved successfully",
     "errorSaving": "Error saving",
     "errorLoading": "Error loading configuration",
-    "parametersRejected": "{{count}} parameter(s) rejected by vehicle"
+    "parametersRejected": "{{count}} parameter(s) rejected by vehicle",
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "reconnect": {
     "noSavedConnections": "No saved connections. Connect manually from Connections.",
@@ -585,6 +587,25 @@
     "address": "Address",
     "netmask": "Netmask",
     "mac": "MAC Address",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "touchCalibration": "Touch Calibration",
+    "touchCalibrationDescription": "Calibrate touchscreen precision to improve response across the entire screen area",
+    "calibrateTouch": "Calibrate Touchscreen"
+  },
+  "touchCalibration": {
+    "selectDevice": "Select Touch Device",
+    "selectDeviceDescription": "Choose the touch device you want to calibrate",
+    "noDeviceSelected": "Please select a touch device",
+    "noDevices": "No compatible touch devices found",
+    "currentMatrix": "Current matrix",
+    "startCalibration": "Start Calibration",
+    "tapTarget": "Tap the Target",
+    "point": "Point",
+    "processing": "Processing Calibration...",
+    "processingDescription": "Calculating and applying transformation matrix",
+    "complete": "Calibration Complete",
+    "completeDescription": "Calibration has been applied and saved successfully. Changes will be applied automatically on restart.",
+    "calibrationError": "Calibration error",
+    "saveError": "Error saving calibration"
   }
 }

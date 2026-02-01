@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import TouchCalibration from '../TouchCalibration'
 import './SystemInfo.css'
 
 function SystemInfo() {
@@ -11,6 +12,7 @@ function SystemInfo() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [showCalibration, setShowCalibration] = useState(false)
 
   useEffect(() => {
     fetchSystemInfo()
@@ -220,6 +222,19 @@ function SystemInfo() {
           </div>
         )}
       </div>
+
+      <div className="calibration-section">
+        <h4 className="subsection-title">🎯 {t('systemInfo.touchCalibration')}</h4>
+        <p className="subsection-description">
+          {t('systemInfo.touchCalibrationDescription')}
+        </p>
+        <button 
+          className="btn-calibrate"
+          onClick={() => setShowCalibration(true)}
+        >
+          🎯 {t('systemInfo.calibrateTouch')}
+        </button>
+      </div>
     </div>
   )
 
@@ -380,6 +395,16 @@ function SystemInfo() {
           🔄 {t('systemInfo.refresh')}
         </button>
       </div>
+
+      {showCalibration && (
+        <TouchCalibration 
+          onClose={() => setShowCalibration(false)}
+          onComplete={(matrix) => {
+            setShowCalibration(false)
+            fetchDisplayInfo()
+          }}
+        />
+      )}
     </div>
   )
 }
