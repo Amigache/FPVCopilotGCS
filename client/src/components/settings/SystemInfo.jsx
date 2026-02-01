@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import OnScreenKeyboard from '../OnScreenKeyboard'
 import './SystemInfo.css'
 
 function SystemInfo() {
@@ -17,6 +18,7 @@ function SystemInfo() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', initialValue: '' })
 
   useEffect(() => {
     fetchSystemInfo()
@@ -184,6 +186,19 @@ function SystemInfo() {
     if (signal >= 50) return '#ff9800'
     if (signal >= 25) return '#ff5722'
     return '#f44336'
+  }
+
+  const openKeyboard = (fieldName, initialValue = '') => {
+    setKeyboard({ isOpen: true, fieldName, initialValue })
+  }
+
+  const closeKeyboard = () => {
+    setKeyboard({ isOpen: false, fieldName: '', initialValue: '' })
+  }
+
+  const handleKeyboardSubmit = (value) => {
+    setWifiPassword(value)
+    closeKeyboard()
   }
 
   const formatBytes = (bytes) => {
@@ -456,7 +471,7 @@ function SystemInfo() {
       {/* Estado actual WiFi */}
       {wifiStatus?.connected && (
         <div className="settings-card wifi-current">
-          <h3 className="card-title">📶 Red actual</h3>
+          <h3 className="card-title">📶 {t('systemInfo.wifiCurrentNetwork')}</h3>
           <div className="wifi-current-info">
             <div className="wifi-current-details">
               <div className="wifi-current-ssid">{wifiStatus.ssid}</div>
@@ -471,7 +486,7 @@ function SystemInfo() {
               className="wifi-disconnect-btn"
               onClick={disconnectWifi}
             >
-              Desconectar
+              {t('systemInfo.wifiDisconnect')}
             </button>
           </div>
         </div>
@@ -480,20 +495,20 @@ function SystemInfo() {
       {/* Redes disponibles */}
       <div className="settings-card">
         <div className="card-header-with-action">
-          <h3 className="card-title">📡 Redes disponibles</h3>
+          <h3 className="card-title">📡 {t('systemInfo.wifiAvailableNetworks')}</h3>
           <button 
             className="wifi-scan-btn"
             onClick={scanWifiNetworks}
             disabled={wifiScanning}
           >
-            {wifiScanning ? '🔄 Escaneando...' : '🔍 Escanear'}
+            {wifiScanning ? `🔄 ${t('systemInfo.wifiScanning')}` : `🔍 ${t('systemInfo.wifiScan')}`}
           </button>
         </div>
 
         <div className="wifi-networks-list">
           {wifiNetworks.length === 0 && !wifiScanning && (
             <div className="no-networks">
-              <p>No se encontraron redes. Pulsa "Escanear" para buscar.</p>
+              <p>{t('systemInfo.wifiNoNetworks')}</p>
             </div>
           )}
 
@@ -523,18 +538,19 @@ function SystemInfo() {
       {selectedNetwork && (
         <div className="wifi-connect-modal">
           <div className="settings-card">
-            <h3 className="card-title">🔑 Conectar a "{selectedNetwork.ssid}"</h3>
+            <h3 className="card-title">🔑 {t('systemInfo.wifiConnectTo')} "{selectedNetwork.ssid}"</h3>
             
             {selectedNetwork.security !== 'Open' && (
               <div className="form-group">
-                <label className="form-label">Contraseña:</label>
+                <label className="form-label">{t('systemInfo.wifiPassword')}:</label>
                 <input
                   type="password"
                   className="form-input"
                   value={wifiPassword}
                   onChange={(e) => setWifiPassword(e.target.value)}
-                  placeholder="Introduce la contraseña"
-                  autoFocus
+                  onClick={() => openKeyboard(t('systemInfo.wifiPassword'), wifiPassword)}
+                  placeholder={t('systemInfo.wifiPasswordPlaceholder')}
+                  readOnly
                 />
               </div>
             )}
@@ -548,14 +564,14 @@ function SystemInfo() {
                 }}
                 disabled={wifiConnecting}
               >
-                Cancelar
+                {t('systemInfo.cancel')}
               </button>
               <button 
                 className="btn-primary"
                 onClick={connectToWifi}
                 disabled={wifiConnecting || (selectedNetwork.security !== 'Open' && !wifiPassword)}
               >
-                {wifiConnecting ? '⏳ Conectando...' : '✓ Conectar'}
+                {wifiConnecting ? `⏳ ${t('systemInfo.wifiConnecting')}` : `✓ ${t('systemInfo.wifiConnect')}`}
               </button>
             </div>
           </div>
@@ -610,20 +626,15 @@ function SystemInfo() {
         {activeTab === 'devices' && renderDevices()}
         {activeTab === 'network' && renderNetwork()}
         {activeTab === 'wifi' && renderWifi()}
-      </div>
 
-      <div className="refresh-section">
-        <button 
-          className="refresh-button"
-          onClick={() => {
-            fetchSystemInfo()
-            fetchDisplayInfo()
-            fetchDevices()
-            fetchNetworkInfo()
-          }}
-        >
-          🔄 {t('systemInfo.refresh')}
-        </button>
+      <OnScreenKeyboard
+        isOpen={keyboard.isOpen}
+        onClose={closeKeyboard}
+        onSubmit={handleKeyboardSubmit}
+        fieldName={keyboard.fieldName}
+        initialValue={keyboard.initialValue}
+        keyboardType="text"
+      />
       </div>
     </div>
   )
