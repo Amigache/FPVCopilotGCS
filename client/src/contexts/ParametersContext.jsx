@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useNotification } from './NotificationContext'
 import { useWebSocketContext } from './WebSocketContext'
 
@@ -36,6 +36,7 @@ export const ParametersProvider = ({ children }) => {
   
   // Estado de parámetros
   const [parameters, setParameters] = useState(new Map())
+  const [updateCounter, setUpdateCounter] = useState(0) // Contador para forzar re-render
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState({ total: 0, received: 0, complete: false })
   const [isConnected, setIsConnected] = useState(false)
@@ -179,19 +180,20 @@ export const ParametersProvider = ({ children }) => {
    */
   const setParameter = useCallback(async (name, value) => {
     try {
-      console.log(`🔄 [ParametersContext] Actualizando ${name} = ${value}`)
+      const previousValue = parameters.get(name)
 
       // Actualización optimista (actualizar UI inmediatamente)
-      const previousValue = parameters.get(name)
       setParameters(prev => {
         const updated = new Map(prev)
         const existingParam = prev.get(name)
+        const newValue = parseFloat(value)
         updated.set(name, {
-          value: parseFloat(value),
+          value: newValue,
           type: existingParam ? existingParam.type : 'REAL32'
         })
         return updated
       })
+      setUpdateCounter(prev => prev + 1)
 
       // Enviar al servidor
       const response = await fetch('/api/mavlink/parameters/set', {
@@ -204,7 +206,6 @@ export const ParametersProvider = ({ children }) => {
 
       if (!result.success) {
         // Revertir si falló
-        console.error(`❌ [ParametersContext] Error actualizando ${name}:`, result.message)
         setParameters(prev => {
           const reverted = new Map(prev)
           if (previousValue !== undefined) {
@@ -218,7 +219,20 @@ export const ParametersProvider = ({ children }) => {
         return { success: false, message: result.message }
       }
 
-      console.log(`✅ [ParametersContext] ${name} actualizado correctamente`)
+      // Actualizar con el valor confirmado del servidor
+      if (result.value !== undefined) {
+        setParameters(prev => {
+          const updated = new Map(prev)
+          const existingParam = prev.get(name)
+          updated.set(name, {
+            value: result.value, // Usar el valor confirmado del servidor
+            type: existingParam ? existingParam.type : 'REAL32'
+          })
+          return updated
+        })
+        setUpdateCounter(prev => prev + 1)
+      }
+      
       return { success: true }
     } catch (error) {
       console.error(`❌ [ParametersContext] Error actualizando ${name}:`, error)
@@ -233,8 +247,6 @@ export const ParametersProvider = ({ children }) => {
    * @returns {Promise<{success: number, failed: number, errors: Array}>}
    */
   const setMultipleParameters = useCallback(async (params) => {
-    console.log(`🔄 [ParametersContext] Actualizando ${params.length} parámetros...`)
-    
     let success = 0
     let failed = 0
     const errors = []
@@ -249,8 +261,6 @@ export const ParametersProvider = ({ children }) => {
       }
     }
 
-    console.log(`✅ [ParametersContext] Actualizados: ${success}, Fallidos: ${failed}`)
-    
     return { success, failed, errors }
   }, [setParameter])
 
@@ -260,23 +270,18 @@ export const ParametersProvider = ({ children }) => {
    */
   const requestParameters = useCallback(async () => {
     try {
-      console.log('📥 [ParametersContext] Solicitando descarga de parámetros...')
-      
       const response = await fetch('/api/mavlink/parameters/request', { method: 'POST' })
       const result = await response.json()
 
       if (result.success) {
-        console.log('✅ [ParametersContext] Solicitud de parámetros enviada')
         // Forzar recarga después de un breve delay
         setTimeout(() => loadParameters(true), 1000)
         return { success: true, message: result.message }
       } else {
-        console.error('❌ [ParametersContext] Error en solicitud:', result.message)
         // Devolver resultado del servidor tal como es
         return { success: false, message: result.message }
       }
     } catch (error) {
-      console.error('❌ [ParametersContext] Error solicitando parámetros:', error)
       return { success: false, message: error.message }
     }
   }, [loadParameters])
@@ -285,15 +290,15 @@ export const ParametersProvider = ({ children }) => {
    * Limpiar caché y forzar recarga
    */
   const clearCache = useCallback(() => {
-    console.log('🗑️  [ParametersContext] Limpiando caché...')
     lastLoadTime.current = null
     setParameters(new Map())
     setStats({ total: 0, received: 0, complete: false })
   }, [])
 
-  const value = {
+  const value = useMemo(() => ({
     // Estado
     parameters,
+    updateCounter, // Para forzar re-render en componentes
     loading,
     stats,
     isConnected,
@@ -314,7 +319,21 @@ export const ParametersProvider = ({ children }) => {
     
     // Alias para compatibilidad
     parameterStats: stats
-  }
+  }), [
+    parameters,
+    updateCounter,
+    loading,
+    stats,
+    isConnected,
+    getParameter,
+    getParametersByPattern,
+    getAllParameters,
+    setParameter,
+    setMultipleParameters,
+    loadParameters,
+    requestParameters,
+    clearCache
+  ])
 
   return (
     <ParametersContext.Provider value={value}>

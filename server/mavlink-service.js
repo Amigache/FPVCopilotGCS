@@ -756,7 +756,7 @@ class MAVLinkService {
 
   // Obtener todos los parámetros
   getParameters() {
-    return {
+    const params = {
       parameters: Array.from(this.parameters.entries()).map(([name, value]) => ({
         name,
         value,
@@ -766,6 +766,11 @@ class MAVLinkService {
       received: this.receivedParams,
       complete: this.paramCount > 0 && this.receivedParams === this.paramCount
     }
+    // Log para diagnóstico
+    if (params.parameters.length <= 5) {
+      console.log(`📤 [getParameters] Devolviendo ${params.parameters.length} parámetros:`, params.parameters)
+    }
+    return params
   }
 
   // Actualizar un parámetro

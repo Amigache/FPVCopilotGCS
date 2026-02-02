@@ -9,7 +9,7 @@ import { useParameters } from '../../contexts/ParametersContext'
 function Parameters() {
   const { t } = useTranslation()
   const notify = useNotification()
-  const { getAllParameters, setParameter, requestParameters: ctxRequestParameters, parameterStats, isConnected, loadParameters: ctxLoadParameters } = useParameters()
+  const { getAllParameters, setParameter, requestParameters: ctxRequestParameters, parameterStats, isConnected, loadParameters: ctxLoadParameters, updateCounter } = useParameters()
   const [filteredParams, setFilteredParams] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
@@ -27,7 +27,7 @@ function Parameters() {
 
   useEffect(() => {
     filterParameters()
-  }, [searchTerm])
+  }, [searchTerm, updateCounter])
 
   useEffect(() => {
     // Auto-descargar parámetros solo una vez si no hay suficientes
@@ -119,6 +119,14 @@ function Parameters() {
   const startEdit = (param) => {
     setEditingParam(param.name)
     setEditValue(param.value.toString())
+    // Abrir teclado numérico para editar el parámetro
+    setKeyboard({ 
+      isOpen: true, 
+      fieldName: param.name, 
+      fieldType: 'edit', 
+      initialValue: param.value.toString(), 
+      keyboardType: 'number' 
+    })
   }
 
   const cancelEdit = () => {
@@ -133,6 +141,8 @@ function Parameters() {
       if (result.success) {
         notify.success(t('parameters.modals.parameterUpdateSuccess', { name: paramName }))
         cancelEdit()
+        // Forzar actualización de la lista filtrada
+        filterParameters()
       } else {
         notify.error(result.message || t('parameters.modals.parameterUpdateError'))
       }
@@ -253,7 +263,14 @@ function Parameters() {
                         step="any"
                         className="edit-input"
                         value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
+                        readOnly
+                        onClick={() => setKeyboard({ 
+                          isOpen: true, 
+                          fieldName: param.name, 
+                          fieldType: 'edit', 
+                          initialValue: editValue, 
+                          keyboardType: 'number' 
+                        })}
                         autoFocus
                       />
                     ) : (
@@ -304,6 +321,7 @@ function Parameters() {
               } else if (keyboard.fieldType === 'edit') {
                 setEditValue(value)
               }
+              setKeyboard({ ...keyboard, isOpen: false })
             }}
             fieldName={keyboard.fieldName}
             initialValue={keyboard.initialValue}
