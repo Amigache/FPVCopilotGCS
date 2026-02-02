@@ -10,7 +10,9 @@ import ToastContainer from './components/ToastContainer'
 import { NotificationProvider, useNotification } from './contexts/NotificationContext'
 import { ParametersProvider } from './contexts/ParametersContext'
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
+import { ConnectionsProvider } from './contexts/ConnectionsContext'
 import { useTranslation } from 'react-i18next'
+import apiClient from './services/api'
 
 function AppContent() {
   const { t } = useTranslation()
@@ -38,13 +40,7 @@ function AppContent() {
     setActionLoading(true)
 
     try {
-      const response = await fetch(`/api/mavlink/command/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemId })
-      })
-
-      const result = await response.json()
+      const result = await apiClient.sendMAVLinkCommand(action, systemId)
       setActionLoading(false)
       setConfirmModal({ isOpen: false, action: null, systemId: null })
 
@@ -133,9 +129,11 @@ function App() {
   return (
     <NotificationProvider>
       <WebSocketProvider>
-        <ParametersProvider>
-          <AppContent />
-        </ParametersProvider>
+        <ConnectionsProvider>
+          <ParametersProvider>
+            <AppContent />
+          </ParametersProvider>
+        </ConnectionsProvider>
       </WebSocketProvider>
     </NotificationProvider>
   )

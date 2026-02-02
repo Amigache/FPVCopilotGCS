@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNotification } from '../../contexts/NotificationContext'
+import apiClient from '../../services/api'
 import OnScreenKeyboard from '../OnScreenKeyboard'
 import UnifiedModal from '../UnifiedModal'
 import './SystemInfo.css'
@@ -42,8 +43,7 @@ function SystemInfo() {
 
   const fetchSystemInfo = async () => {
     try {
-      const response = await fetch('/api/system/info')
-      const data = await response.json()
+      const data = await apiClient.getSystemInfo()
       setSystemInfo(data)
     } catch (err) {
       setError(err.message)
@@ -54,8 +54,7 @@ function SystemInfo() {
 
   const fetchDisplayInfo = async () => {
     try {
-      const response = await fetch('/api/system/display')
-      const data = await response.json()
+      const data = await apiClient.getDisplayInfo()
       setDisplayInfo(data)
     } catch (err) {
       console.error('Error fetching display info:', err)
@@ -64,8 +63,7 @@ function SystemInfo() {
 
   const fetchDevices = async () => {
     try {
-      const response = await fetch('/api/system/devices')
-      const data = await response.json()
+      const data = await apiClient.getDevices()
       setDevices(data)
     } catch (err) {
       console.error('Error fetching devices:', err)
@@ -74,8 +72,7 @@ function SystemInfo() {
 
   const fetchNetworkInfo = async () => {
     try {
-      const response = await fetch('/api/system/network')
-      const data = await response.json()
+      const data = await apiClient.getNetworkInfo()
       setNetworkInfo(data)
     } catch (err) {
       console.error('Error fetching network info:', err)
@@ -84,8 +81,7 @@ function SystemInfo() {
 
   const fetchWifiStatus = async () => {
     try {
-      const response = await fetch('/api/wifi/status')
-      const data = await response.json()
+      const data = await apiClient.getWiFiStatus()
       setWifiStatus(data)
     } catch (err) {
       console.error('Error fetching WiFi status:', err)
@@ -95,8 +91,7 @@ function SystemInfo() {
   const scanWifiNetworks = async () => {
     setWifiScanning(true)
     try {
-      const response = await fetch('/api/wifi/scan')
-      const data = await response.json()
+      const data = await apiClient.scanWiFi()
       setWifiNetworks(data.networks || [])
     } catch (err) {
       console.error('Error scanning WiFi:', err)
@@ -111,15 +106,7 @@ function SystemInfo() {
     
     setWifiConnecting(true)
     try {
-      const response = await fetch('/api/wifi/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ssid: selectedNetwork.ssid,
-          password: wifiPassword
-        })
-      })
-      const data = await response.json()
+      const data = await apiClient.connectWiFi(selectedNetwork.ssid, wifiPassword)
       
       if (data.success) {
         notify.success(data.message)
@@ -139,10 +126,7 @@ function SystemInfo() {
 
   const disconnectWifi = async () => {
     try {
-      const response = await fetch('/api/wifi/disconnect', {
-        method: 'POST'
-      })
-      const data = await response.json()
+      const data = await apiClient.disconnectWiFi()
       
       if (data.success) {
         notify.success(data.message)
@@ -159,10 +143,7 @@ function SystemInfo() {
 
   const forgetNetwork = async (ssid) => {
     try {
-      const response = await fetch(`/api/wifi/forget/${encodeURIComponent(ssid)}`, {
-        method: 'DELETE'
-      })
-      const data = await response.json()
+      const data = await apiClient.forgetWiFi(ssid)
       
       if (data.success) {
         notify.success(data.message)
@@ -207,7 +188,7 @@ function SystemInfo() {
   const handleReboot = async () => {
     try {
       notify.info(t('systemInfo.power.rebooting'))
-      await fetch('/api/system/reboot', { method: 'POST' })
+      await apiClient.rebootSystem()
       setPowerModal({ isOpen: false, action: '' })
     } catch (error) {
       console.error('Error rebooting:', error)
@@ -218,7 +199,7 @@ function SystemInfo() {
   const handleShutdown = async () => {
     try {
       notify.info(t('systemInfo.power.shuttingDown'))
-      await fetch('/api/system/shutdown', { method: 'POST' })
+      await apiClient.shutdownSystem()
       setPowerModal({ isOpen: false, action: '' })
     } catch (error) {
       console.error('Error shutting down:', error)

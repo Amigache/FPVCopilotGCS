@@ -2,19 +2,23 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
 import { useNotification } from '../contexts/NotificationContext'
+import { useConnections } from '../contexts/ConnectionsContext'
+import apiClient from '../services/api'
 import ParameterDownloadModal from './ParameterDownloadModal'
 import './TopBar.css'
 
 function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const notify = useNotification()
+  const { connections, getActiveConnection } = useConnections()
   const { 
     selectedVehicle, 
     selectedVehicleId, 
     setSelectedVehicleId, 
     vehicles, 
     connectionStatus,
-    markManualDisconnect
+    connectToMavlink,
+    disconnectFromMavlink
   } = useWebSocketContext()
   
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('es-ES', { 
@@ -95,20 +99,8 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     if (!selectedVehicleId) return
     
     try {
-      const response = await fetch('/api/mavlink/flightmode', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          systemId: selectedVehicleId,
-          customMode: parseInt(customMode)
-        })
-      })
-
-      if (response.ok) {
-        setShowFlightModeDropdown(false)
-      }
+      await apiClient.setFlightMode(selectedVehicleId, parseInt(customMode))
+      setShowFlightModeDropdown(false)
     } catch (error) {
       console.error('Error changing flight mode:', error)
     }
@@ -137,22 +129,16 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   // Autoconexión al iniciar la aplicación
   useEffect(() => {
-    // Solo autoconectar si no está conectado
+    // Solo autoconectar si no está conectado y hay una conexión activa
     const checkAndAutoConnect = async () => {
       if (isConnected) return
       
-      try {
-        const response = await fetch('/api/connections')
-        const data = await response.json()
-        
-        if (data.activeConnectionId && data.connections.length > 0) {
-          // Pequeño delay para asegurar que el WebSocket está listo
-          setTimeout(() => {
-            handleAutoConnect()
-          }, 500)
-        }
-      } catch (error) {
-        console.error('Error checking connections:', error)
+      const activeConnection = getActiveConnection()
+      if (activeConnection && connections.length > 0) {
+        // Pequeño delay para asegurar que el WebSocket está listo
+        setTimeout(() => {
+          handleAutoConnect()
+        }, 500)
       }
     }
     
@@ -231,70 +217,34 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     
     setConnecting(true)
     try {
-      // Obtener lista de conexiones guardadas desde backend
-      const response = await fetch('/api/connections')
-      const data = await response.json()
-      
-      if (!data.connections || data.connections.length === 0) {
+      if (connections.length === 0) {
         console.log('No hay conexiones guardadas')
         notify.error(t('topbar.connectionError.noSavedConnections'))
         setConnecting(false)
         return
       }
 
-      const connections = data.connections
-      const activeId = data.activeConnectionId
+      const activeConnection = getActiveConnection()
 
       // Probar primero con la conexión activa, luego con las demás
-      const ordered = activeId
-        ? [connections.find(c => c.id === activeId), ...connections.filter(c => c.id !== activeId)]
+      const ordered = activeConnection
+        ? [activeConnection, ...connections.filter(c => c.id !== activeConnection.id)]
         : connections
 
       // Probar cada conexión hasta encontrar una válida
       for (const connection of ordered) {
         if (!connection) continue
-        try {
-          const response = await fetch('/api/mavlink/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: connection.type, config: connection.config })
-          })
-          const result = await response.json()
-          
-          if (result.success) {
-            // Guardar en backend la conexión activa
-            await fetch('/api/connections/active', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ activeConnectionId: connection.id })
-            })
-            
-            // Solicitar parámetros después de conectar
-            // Verificar si es modo servidor TCP (no solicitar parámetros aún)
-            const isTcpServer = connection.type === 'tcp' && connection.config.mode === 'Servidor'
-            
-            if (!isTcpServer) {
-              // Para serial o TCP cliente, solicitar parámetros inmediatamente
-              // Pequeño delay para asegurar que la conexión está establecida
-              setTimeout(async () => {
-                try {
-                  const paramResponse = await fetch('/api/mavlink/parameters/request', { method: 'POST' })
-                  const paramResult = await paramResponse.json()
-                  
-                  if (paramResult.success) {
-                    setShowParamDownload(true)
-                  }
-                } catch (error) {
-                  console.error('Error solicitando parámetros:', error)
-                }
-              }, 500)
-            }
-            
-            setConnecting(false)
-            return // Salir al encontrar conexión exitosa
-          }
-        } catch (error) {
-          continue // Probar siguiente conexión
+        
+        const result = await connectToMavlink(connection, { 
+          isAutoConnect: true, 
+          silent: false, 
+          requestParams: true 
+        })
+        
+        if (result.success) {
+          setShowParamDownload(true)
+          setConnecting(false)
+          return // Salir al encontrar conexión exitosa
         }
       }
       
@@ -311,21 +261,8 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   // Función para desconectar
   const handleDisconnect = async () => {
     try {
-      // Marcar como desconexión manual (esto limpiará el estado inmediatamente)
-      markManualDisconnect()
-      
-      const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
-      const result = await response.json()
-      
-      if (result.success) {
-        // Limpiar conexión activa en backend
-        await fetch('/api/connections/active', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeConnectionId: null })
-        })
-        console.log('Desconectado exitosamente')
-      }
+      await disconnectFromMavlink({ silent: true })
+      console.log('Desconectado exitosamente')
     } catch (error) {
       console.error('Error desconectando:', error)
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { io } from 'socket.io-client'
 import { useNotification } from '../contexts/NotificationContext'
 import { useTranslation } from 'react-i18next'
+import apiClient from '../services/api'
 
 /**
  * Hook para manejar la conexión WebSocket con el servidor
@@ -216,6 +217,98 @@ export function useWebSocket() {
     manualDisconnectRef.current = false
   }, [])
 
+  // ==================== Funciones Centralizadas de Conexión ====================
+
+  /**
+   * Conectar a MAVLink de forma centralizada
+   * @param {object} connection - Objeto de conexión con { id, name, type, config }
+   * @param {object} options - Opciones: { isAutoConnect, silent, requestParams }
+   */
+  const connectToMavlink = useCallback(async (connection, options = {}) => {
+    const { 
+      isAutoConnect = false, 
+      silent = false, 
+      requestParams = true 
+    } = options;
+
+    try {
+      // Conectar a MAVLink
+      const result = await apiClient.connectMAVLink(connection.type, connection.config);
+
+      if (result.success) {
+        // Actualizar conexión activa en backend
+        await apiClient.updateActiveConnection(connection.id);
+
+        // Reactivar auto-reconnect
+        enableAutoReconnect();
+
+        // Mostrar notificación
+        if (!silent) {
+          if (isAutoConnect) {
+            notify.info(t('reconnect.reconnectedWith', { name: connection.name }));
+          } else {
+            notify.success(t('connected'));
+          }
+        }
+
+        // Solicitar parámetros si no es servidor TCP
+        const isTcpServer = connection.type === 'tcp' && connection.config.mode === 'Servidor';
+        if (requestParams && !isTcpServer) {
+          try {
+            await apiClient.requestParameters();
+          } catch (paramError) {
+            console.warn('No se pudieron solicitar parámetros:', paramError);
+          }
+        }
+
+        return { success: true };
+      } else {
+        if (!silent) {
+          notify.error(result.message || t('connectionError'));
+        }
+        return { success: false, message: result.message };
+      }
+    } catch (error) {
+      console.error('Error conectando a MAVLink:', error);
+      if (!silent) {
+        notify.error(error.message || t('connectionError'));
+      }
+      return { success: false, error: error.message };
+    }
+  }, [notify, t, enableAutoReconnect]);
+
+  /**
+   * Desconectar de MAVLink de forma centralizada
+   * @param {object} options - Opciones: { silent }
+   */
+  const disconnectFromMavlink = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+
+    try {
+      // Marcar desconexión manual (detiene auto-reconnect)
+      markManualDisconnect();
+
+      // Desconectar del backend
+      const result = await apiClient.disconnectMAVLink();
+
+      if (!silent) {
+        if (result.success) {
+          notify.success(t('disconnected'));
+        } else {
+          notify.warning(result.message || t('disconnectionError'));
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error desconectando de MAVLink:', error);
+      if (!silent) {
+        notify.error(error.message || t('disconnectionError'));
+      }
+      return { success: false, error: error.message };
+    }
+  }, [notify, t, markManualDisconnect]);
+
   return {
     isConnected,
     vehicles,
@@ -227,7 +320,10 @@ export function useWebSocket() {
     parametersProgress,
     emit,
     markManualDisconnect,
-    enableAutoReconnect
+    enableAutoReconnect,
+    // Nuevas funciones centralizadas
+    connectToMavlink,
+    disconnectFromMavlink
   }
 }
 

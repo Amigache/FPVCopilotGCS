@@ -5,16 +5,23 @@ import ParameterDownloadModal from '../ParameterDownloadModal'
 import OnScreenKeyboard from '../OnScreenKeyboard'
 import { useNotification } from '../../contexts/NotificationContext'
 import { useWebSocketContext } from '../../contexts/WebSocketContext'
+import { useConnections } from '../../contexts/ConnectionsContext'
+import apiClient from '../../services/api'
 
 function Connections() {
   const { t } = useTranslation()
   const notify = useNotification()
-  const { connectionStatus, markManualDisconnect, enableAutoReconnect } = useWebSocketContext()
+  const { connectionStatus, connectToMavlink, disconnectFromMavlink } = useWebSocketContext()
+  const { 
+    connections, 
+    activeConnectionId, 
+    addConnection, 
+    updateConnection, 
+    deleteConnection 
+  } = useConnections()
   const [connecting, setConnecting] = useState(false)
   const [showParamDownload, setShowParamDownload] = useState(false)
-  const [connections, setConnections] = useState([])
   const [showAddModal, setShowAddModal] = useState(false)
-  const [activeConnection, setActiveConnection] = useState(null) // ID de la conexión activa
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', fieldKey: '', initialValue: '', keyboardType: 'text' })
   const [serialPorts, setSerialPorts] = useState([])
   const [loadingPorts, setLoadingPorts] = useState(false)
@@ -27,63 +34,10 @@ function Connections() {
     }
   })
 
-  // Cargar conexiones guardadas al iniciar desde el backend
-  useEffect(() => {
-    const loadConnections = async () => {
-      try {
-        const response = await fetch('/api/connections')
-        const data = await response.json()
-        if (data.connections) {
-          setConnections(data.connections)
-        }
-        if (data.activeConnectionId) {
-          setActiveConnection(data.activeConnectionId)
-        }
-      } catch (error) {
-        console.error('Error cargando conexiones:', error)
-      }
-    }
-    loadConnections()
-  }, [])
-
-  // Guardar conexiones y activeConnection cuando cambien
-  const saveConnectionsToBackend = async (newConnections, newActiveId) => {
-    try {
-      await fetch('/api/connections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          connections: newConnections,
-          activeConnectionId: newActiveId
-        })
-      })
-    } catch (error) {
-      console.error('Error guardando conexiones:', error)
-    }
-  }
-
   const handleDisconnect = async () => {
     try {
-      // Marcar como desconexión manual para detener auto-reconnect
-      markManualDisconnect()
-      
-      const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
-      const result = await response.json()
-      
-      if (result.success) {
-        // Limpiar estado local
-        setActiveConnection(null)
-        
-        // Actualizar solo activeConnectionId en backend
-        await fetch('/api/connections/active', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeConnectionId: null })
-        })
-        
-        // No mostrar modal, la desconexión es silenciosa
-        console.log('Desconectado exitosamente')
-      }
+      await disconnectFromMavlink({ silent: true })
+      console.log('Desconectado exitosamente')
     } catch (error) {
       console.error('Error desconectando:', error)
       notify.error(t('connections.messages.disconnectError'))
@@ -93,91 +47,25 @@ function Connections() {
   const handleConnect = async (connection, isAutoConnect = false) => {
     setConnecting(true)
     
-    // Reactivar auto-reconnect al conectar manualmente
-    if (!isAutoConnect) {
-      enableAutoReconnect()
-    }
-    
     try {
-      // Primero conectar
-      const response = await fetch('/api/mavlink/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: connection.type, config: connection.config })
+      const result = await connectToMavlink(connection, { 
+        isAutoConnect, 
+        silent: false, 
+        requestParams: true 
       })
-      const result = await response.json()
       
       if (result.success) {
-        // Establecer como conexión activa localmente
-        setActiveConnection(connection.id)
-        
-        // Actualizar solo activeConnectionId en backend (más eficiente)
-        await fetch('/api/connections/active', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeConnectionId: connection.id })
-        })
-        
-        if (!isAutoConnect) {
-          console.log('Conexión establecida:', connection.name)
-        }
+        console.log('Conexión establecida:', connection.name)
         
         // Verificar si es modo servidor TCP
         const isTcpServer = connection.type === 'tcp' && connection.config.mode === 'Servidor'
         
-        if (isTcpServer) {
-          // Modo servidor: No solicitar parámetros aún, esperar a que un cliente se conecte
-          if (!isAutoConnect) {
-            notify.info(t('connections.messages.serverListening', { port: connection.config.port }))
-          }
-        } else {
-          // Modo cliente o serial: Solicitar parámetros inmediatamente
-          try {
-            const paramResponse = await fetch('/api/mavlink/parameters/request', { method: 'POST' })
-            const paramResult = await paramResponse.json()
-            
-            if (paramResult.success) {
-              // Solo mostrar el modal si la solicitud de parámetros fue exitosa y no es auto-connect
-              if (!isAutoConnect) {
-                setShowParamDownload(true)
-              }
-            } else {
-              // Conexión OK pero no se pudieron solicitar parámetros
-              if (!isAutoConnect) {
-                notify.warning(t('connections.messages.paramsRequestError', { message: paramResult.message }))
-              }
-            }
-          } catch (error) {
-            console.error('Error iniciando descarga de parámetros:', error)
-            if (!isAutoConnect) {
-              notify.error(t('connections.messages.paramsError'))
-            }
-          }
-        }
-      } else {
-        setActiveConnection(null)
-        await fetch('/api/connections/active', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeConnectionId: null })
-        })
-        
-        if (!isAutoConnect) {
-          notify.error(result.message || t('connections.messages.connectionFailed'))
+        if (!isTcpServer && !isAutoConnect) {
+          setShowParamDownload(true)
         }
       }
     } catch (error) {
       console.error('Error conectando:', error)
-      setActiveConnection(null)
-      await fetch('/api/connections/active', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activeConnectionId: null })
-      })
-      
-      if (!isAutoConnect) {
-        notify.error(t('connections.messages.serverNotAvailable'))
-      }
     } finally {
       setConnecting(false)
     }
@@ -189,17 +77,7 @@ function Connections() {
       return
     }
 
-    const connection = {
-      id: Date.now(),
-      ...newConnection
-    }
-
-    const updatedConnections = [...connections, connection]
-    setConnections(updatedConnections)
-    
-    // Guardar inmediatamente en backend
-    await saveConnectionsToBackend(updatedConnections, activeConnection)
-    
+    const connection = await addConnection(newConnection)
     setShowAddModal(false)
     
     // Auto-conectar inmediatamente después de crear
@@ -220,15 +98,11 @@ function Connections() {
 
   const handleDeleteConnection = async (id) => {
     // Si es la conexión activa, desconectar primero
-    if (activeConnection === id) {
+    if (activeConnectionId === id) {
       await handleDisconnect()
     }
     
-    const updatedConnections = connections.filter(conn => conn.id !== id)
-    setConnections(updatedConnections)
-    
-    // Actualizar backend inmediatamente
-    await saveConnectionsToBackend(updatedConnections, activeConnection === id ? null : activeConnection)
+    await deleteConnection(id)
   }
 
   // Función para abrir el teclado en pantalla
@@ -261,8 +135,7 @@ function Connections() {
   const loadSerialPorts = async () => {
     setLoadingPorts(true)
     try {
-      const response = await fetch('/api/serial/ports')
-      const data = await response.json()
+      const data = await apiClient.getSerialPorts()
       if (data.success && data.ports.length > 0) {
         setSerialPorts(data.ports)
         // Usar el primer puerto detectado si el actual no está en la lista
