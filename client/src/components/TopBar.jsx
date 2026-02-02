@@ -10,7 +10,7 @@ import './TopBar.css'
 function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const notify = useNotification()
-  const { connections, getActiveConnection, loading, activeConnectionId } = useConnections()
+  const { connections, getActiveConnection, loading, activeConnectionId, setManualDisconnect } = useConnections()
   const { 
     selectedVehicle, 
     selectedVehicleId, 
@@ -292,6 +292,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   // Función para desconectar
   const handleDisconnect = async () => {
     try {
+      setManualDisconnect(true) // Marcar como desconexión manual en ConnectionsContext
       await disconnectFromMavlink({ silent: true })
       console.log('Desconectado exitosamente')
     } catch (error) {
@@ -314,7 +315,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         
         {/* Estado Armado/Desarmado */}
         {hasTelemetry && (
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} ref={armDropdownRef}>
             <div className={`indicator ${isArmed() ? 'armed' : 'disarmed'} clickable`}
                  onClick={(e) => {
                    e.stopPropagation()
@@ -327,7 +328,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
             </div>
             
             {showArmDropdown && (
-              <div className="arm-dropdown" ref={armDropdownRef}>
+              <div className="arm-dropdown">
                 <div
                   className={`arm-dropdown-option arm-option ${isArmed() ? 'disabled' : ''}`}
                   onClick={(e) => {
@@ -359,7 +360,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         
         {/* Modo de Vuelo */}
         {hasTelemetry && (
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} ref={dropdownRef}>
             <div className="indicator flight-mode clickable" 
                  onClick={(e) => {
                    e.stopPropagation()
@@ -372,7 +373,7 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
             </div>
             
             {showFlightModeDropdown && (
-              <div className="flight-mode-dropdown" ref={dropdownRef}>
+              <div className="flight-mode-dropdown">
                 {Object.entries(availableFlightModes).map(([mode, name]) => (
                   <div
                     key={mode}

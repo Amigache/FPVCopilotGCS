@@ -17,7 +17,8 @@ function Connections() {
     activeConnectionId, 
     addConnection, 
     updateConnection, 
-    deleteConnection 
+    deleteConnection,
+    setManualDisconnect
   } = useConnections()
   const [connecting, setConnecting] = useState(false)
   const [showParamDownload, setShowParamDownload] = useState(false)
@@ -36,6 +37,7 @@ function Connections() {
 
   const handleDisconnect = async () => {
     try {
+      setManualDisconnect(true) // Marcar como desconexión manual
       await disconnectFromMavlink({ silent: true })
       console.log('Desconectado exitosamente')
     } catch (error) {

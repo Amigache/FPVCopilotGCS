@@ -128,7 +128,6 @@ function MapEventHandler({ onContextMenu }) {
   useEffect(() => {
     const handleContextMenu = (e) => {
       e.originalEvent.preventDefault() // Prevenir menú contextual del navegador
-      e.originalEvent.stopPropagation() // Detener propagación del evento
       onContextMenu(e.latlng, e.containerPoint)
     }
     
@@ -280,33 +279,62 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
     // Ajustar offset si el sidebar izquierdo está abierto
     const offsetX = leftSidebarOpen ? 350 : 0
     
-    // Si ya hay un menú abierto, primero lo cerramos
-    if (contextMenu.show) {
-      setContextMenu({ show: false, x: 0, y: 0, lat: 0, lng: 0 })
-      // Usar setTimeout para asegurar que el estado se actualice antes de abrir el nuevo
-      setTimeout(() => {
-        setContextMenu({
-          show: true,
-          x: point.x + offsetX + 15, // Offset a la derecha del punto + sidebar
-          y: point.y + 85, // Offset abajo del punto
-          lat: latlng.lat,
-          lng: latlng.lng
-        })
-      }, 0)
-    } else {
-      setContextMenu({
-        show: true,
-        x: point.x + offsetX + 15, // Offset a la derecha del punto + sidebar
-        y: point.y + 85, // Offset abajo del punto
-        lat: latlng.lat,
-        lng: latlng.lng
-      })
+    // Dimensiones del menú contextual
+    const menuWidth = 250
+    const menuHeight = 200
+    const margin = 15 // Margen desde el cursor
+    
+    // Dimensiones de la ventana
+    const windowWidth = window.innerWidth
+    const windowHeight = window.innerHeight
+    
+    // Calcular posición inicial (a la derecha y abajo del cursor)
+    let x = point.x + offsetX + margin
+    let y = point.y + 85 // Offset para compensar el TopBar
+    
+    // Detectar si el menú se sale por la derecha
+    if (x + menuWidth > windowWidth) {
+      // Abrir a la izquierda del cursor
+      x = point.x + offsetX - menuWidth - margin
     }
+    
+    // Detectar si el menú se sale por abajo
+    if (y + menuHeight > windowHeight) {
+      // Abrir arriba del cursor
+      y = point.y + 85 - menuHeight - margin
+    }
+    
+    // Siempre abrir el menú en la nueva posición (sobrescribiendo si ya existe uno)
+    setContextMenu({
+      show: true,
+      x: x,
+      y: y,
+      lat: latlng.lat,
+      lng: latlng.lng
+    })
   }
 
   const closeContextMenu = () => {
     setContextMenu({ show: false, x: 0, y: 0, lat: 0, lng: 0 })
   }
+
+  // Cerrar menú contextual con click izquierdo fuera de él
+  useEffect(() => {
+    if (!contextMenu.show) return
+
+    const handleClickOutside = (e) => {
+      // Solo cerrar con click izquierdo, no con click derecho
+      if (e.button === 0) {
+        const menu = document.querySelector('.context-menu')
+        if (menu && !menu.contains(e.target)) {
+          closeContextMenu()
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [contextMenu.show])
 
   const handleCenterHere = () => {
     // Implementar centrado del mapa
@@ -738,6 +766,12 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
           <Marker 
             position={[contextMenu.lat, contextMenu.lng]} 
             icon={contextMarkerIcon}
+            eventHandlers={{
+              contextmenu: (e) => {
+                e.originalEvent.preventDefault()
+                // Permitir que el evento del mapa maneje el contextmenu
+              }
+            }}
           />
         )}
       </MapContainer>
@@ -745,11 +779,7 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
       {/* Menú contextual del mapa */}
       {contextMenu.show && (
         <>
-          <div 
-            className="context-menu-overlay" 
-            onClick={closeContextMenu}
-            onContextMenu={(e) => e.preventDefault()}
-          />
+          <div className="context-menu-overlay" />
           <div 
             className="context-menu"
             style={{

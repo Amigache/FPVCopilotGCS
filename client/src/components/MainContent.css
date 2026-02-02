@@ -625,11 +625,13 @@
   bottom: 0;
   z-index: 2000;
   background: transparent;
+  pointer-events: none;
 }
 
 .context-menu {
   position: fixed;
   z-index: 2001;
+  pointer-events: auto;
   min-width: 250px;
   background: rgba(15, 52, 96, 0.98);
   backdrop-filter: blur(10px);
