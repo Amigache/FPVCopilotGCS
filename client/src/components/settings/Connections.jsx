@@ -77,23 +77,28 @@ function Connections() {
       return
     }
 
-    const connection = await addConnection(newConnection)
-    setShowAddModal(false)
+    const result = await addConnection(newConnection)
     
-    // Auto-conectar inmediatamente después de crear
-    setTimeout(() => {
-      handleConnect(connection)
-    }, 100)
-    
-    // Resetear formulario con valores por defecto
-    setNewConnection({ 
-      name: '', 
-      type: 'serial', 
-      config: {
-        port: '/dev/ttyACM0',
-        baudrate: '115200'
-      }
-    })
+    if (result.success && result.connection) {
+      setShowAddModal(false)
+      
+      // Resetear formulario con valores por defecto
+      setNewConnection({ 
+        name: '', 
+        type: 'serial', 
+        config: {
+          port: '/dev/ttyACM0',
+          baudrate: '115200'
+        }
+      })
+      
+      // Auto-conectar después de guardar exitosamente
+      // Si falla la conexión, la configuración ya está guardada para reintentarlo después
+      setTimeout(() => {
+        handleConnect(result.connection)
+      }, 100)
+    }
+    // Si falla al guardar, no se cierra el modal y el usuario puede corregir los datos
   }
 
   const handleDeleteConnection = async (id) => {
@@ -425,7 +430,7 @@ function Connections() {
                 </div>
               </div>
               <div className="connection-actions">
-                {activeConnection === connection.id ? (
+                {activeConnectionId === connection.id && connectionStatus.connected ? (
                   <button 
                     className="btn-disconnect"
                     onClick={handleDisconnect}
@@ -437,7 +442,7 @@ function Connections() {
                   <button 
                     className="btn-connect"
                     onClick={() => handleConnect(connection)}
-                    disabled={connecting || activeConnection !== null}
+                    disabled={connecting || (activeConnectionId !== null && connectionStatus.connected)}
                     title={t('connections.connect')}
                   >
                     {connecting ? '⏳' : '▶'}
@@ -446,7 +451,7 @@ function Connections() {
                 <button 
                   className="btn-delete"
                   onClick={() => handleDeleteConnection(connection.id)}
-                  disabled={activeConnection === connection.id}
+                  disabled={activeConnectionId === connection.id}
                   title={t('connections.delete')}
                 >
                   🗑️

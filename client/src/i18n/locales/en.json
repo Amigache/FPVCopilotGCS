@@ -145,7 +145,12 @@
       "webSerialNotSupported": "Your browser does not support Web Serial API. Use Chrome, Edge or a compatible browser.",
       "serialPortSelected": "Serial port selected successfully",
       "serialPortError": "Error selecting serial port"
-    }
+    },
+    "loadError": "Could not load connections",
+    "saveError": "Could not save connection",
+    "added": "Connection added successfully",
+    "updated": "Connection updated successfully",
+    "deleted": "Connection deleted successfully"
   },
   "parameters": {
     "title": "Vehicle Parameters",
@@ -391,7 +396,9 @@
     "completeBackground": "✓ Parameter download completed ({{count}} parameters)",
     "continueBackground": "Close (continue in background)",
     "cancel": "Cancel download",
-    "cancelling": "Cancelling..."
+    "cancelling": "Cancelling...",
+    "cancelled": "Parameter download cancelled (connection remains active)",
+    "cancelError": "Error cancelling parameter download"
   },
   "modal": {
     "understood": "Understood",

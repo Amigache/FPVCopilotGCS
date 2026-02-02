@@ -6,7 +6,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import os from 'os';
 import mavlinkService from './mavlink-service.js';
@@ -67,6 +67,31 @@ const CONNECTIONS_FILE = path.join(DATA_DIR, 'connections.json');
 // Asegurar que el directorio de datos existe
 if (!existsSync(DATA_DIR)) {
   await mkdir(DATA_DIR, { recursive: true });
+}
+
+/**
+ * Escritura atómica de archivos para prevenir corrupción
+ * Escribe a un archivo temporal y luego lo renombra
+ */
+async function atomicWriteFile(filePath, data) {
+  const tempFile = `${filePath}.tmp`;
+  try {
+    // Escribir al archivo temporal
+    await writeFile(tempFile, data, 'utf-8');
+    
+    // Renombrar (operación atómica en la mayoría de sistemas de archivos)
+    await rename(tempFile, filePath);
+  } catch (error) {
+    // Limpiar archivo temporal en caso de error
+    try {
+      if (existsSync(tempFile)) {
+        await unlink(tempFile);
+      }
+    } catch (cleanupError) {
+      console.error('Error limpiando archivo temporal:', cleanupError);
+    }
+    throw error;
+  }
 }
 
 // Configurar Socket.IO en mavlink-service
@@ -167,10 +192,37 @@ app.get('/api/connections', async (req, res) => {
       return res.json({ connections: [], activeConnectionId: null });
     }
     const data = await readFile(CONNECTIONS_FILE, 'utf-8');
+    
+    // Validar que el archivo no esté vacío
+    if (!data || data.trim().length === 0) {
+      console.warn('Archivo connections.json vacío, retornando valores por defecto');
+      return res.json({ connections: [], activeConnectionId: null });
+    }
+    
     const parsed = JSON.parse(data);
+    
+    // Validar estructura del JSON
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('Estructura inválida en connections.json, retornando valores por defecto');
+      return res.json({ connections: [], activeConnectionId: null });
+    }
+    
+    // Asegurar que connections sea un array
+    if (!Array.isArray(parsed.connections)) {
+      parsed.connections = [];
+    }
+    
     res.json(parsed);
   } catch (error) {
-    console.error('Error leyendo conexiones:', error);
+    console.error('Error leyendo conexiones:', error.message);
+    // Si el JSON está corrupto, recrear el archivo
+    try {
+      const defaultData = { connections: [], activeConnectionId: null };
+      await atomicWriteFile(CONNECTIONS_FILE, JSON.stringify(defaultData, null, 2));
+      console.log('✅ Archivo connections.json recreado con valores por defecto');
+    } catch (writeError) {
+      console.error('❌ Error recreando connections.json:', writeError.message);
+    }
     res.json({ connections: [], activeConnectionId: null });
   }
 });
@@ -178,7 +230,11 @@ app.get('/api/connections', async (req, res) => {
 app.post('/api/connections', validateSaveConnections, async (req, res) => {
   try {
     const { connections, activeConnectionId } = req.body;
-    await writeFile(CONNECTIONS_FILE, JSON.stringify({ connections, activeConnectionId }, null, 2));
+    const data = { connections, activeConnectionId };
+    
+    // Usar escritura atómica para prevenir corrupción
+    await atomicWriteFile(CONNECTIONS_FILE, JSON.stringify(data, null, 2));
+    
     res.json({ success: true, message: 'Conexiones guardadas' });
   } catch (error) {
     console.error('Error guardando conexiones:', error);
@@ -198,7 +254,10 @@ app.patch('/api/connections/active', validateActiveConnection, async (req, res) 
     }
     
     data.activeConnectionId = activeConnectionId;
-    await writeFile(CONNECTIONS_FILE, JSON.stringify(data, null, 2));
+    
+    // Usar escritura atómica para prevenir corrupción
+    await atomicWriteFile(CONNECTIONS_FILE, JSON.stringify(data, null, 2));
+    
     res.json({ success: true, message: 'Conexión activa actualizada' });
   } catch (error) {
     console.error('Error actualizando conexión activa:', error);
@@ -214,6 +273,12 @@ app.get('/api/mavlink/parameters', (req, res) => {
 
 app.post('/api/mavlink/parameters/request', async (req, res) => {
   const result = await mavlinkService.requestParameters();
+  res.json(result);
+});
+
+// Cancelar descarga de parámetros (sin desconectar)
+app.post('/api/mavlink/parameters/cancel', (req, res) => {
+  const result = mavlinkService.cancelParameterDownload();
   res.json(result);
 });
 

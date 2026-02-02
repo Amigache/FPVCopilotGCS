@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNotification } from './NotificationContext';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
@@ -21,23 +21,47 @@ export const ConnectionsProvider = ({ children }) => {
   const [activeConnectionId, setActiveConnectionId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const loadingRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 3;
 
   /**
-   * Cargar conexiones desde el backend
+   * Cargar conexiones desde el backend con retry logic
    */
-  const loadConnections = useCallback(async () => {
+  const loadConnections = useCallback(async (isRetry = false) => {
+    // Evitar múltiples cargas simultáneas
+    if (loadingRef.current && !isRetry) {
+      console.log('⏭️ Carga ya en progreso, saltando...');
+      return;
+    }
+
     try {
+      loadingRef.current = true;
       setLoading(true);
       const data = await apiClient.getConnections();
       setConnections(data.connections || []);
       setActiveConnectionId(data.activeConnectionId || null);
+      retryCountRef.current = 0; // Reset retry count on success
     } catch (error) {
       console.error('Error cargando conexiones:', error);
+      
+      // Retry logic con exponential backoff
+      if (retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++;
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 5000);
+        console.log(`🔄 Reintentando en ${delay}ms (intento ${retryCountRef.current}/${MAX_RETRIES})...`);
+        setTimeout(() => loadConnections(true), delay);
+        return;
+      }
+      
+      // Solo mostrar error después de todos los reintentos
       notify.error(t('connections.loadError'));
       setConnections([]);
       setActiveConnectionId(null);
+      retryCountRef.current = 0;
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [notify, t]);
 

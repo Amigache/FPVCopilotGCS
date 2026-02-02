@@ -24,26 +24,73 @@ export const validateMavlinkConnect = [
   // Validación condicional para puerto serial
   body('config.port')
     .if(body('type').equals('serial'))
-    .matches(/^\/dev\/tty[A-Z0-9]+$/)
+    .isString()
+    .matches(/^\/dev\/tty[A-Za-z0-9]+$/)
     .withMessage('Invalid serial port format'),
   
-  // Validación para baudrate
+  // Validación para baudrate (aceptar string o número)
   body('config.baudrate')
     .if(body('type').equals('serial'))
-    .isIn(['9600', '57600', '115200', '230400', '460800', '921600'])
+    .custom((value) => {
+      const validBaudrates = ['9600', '57600', '115200', '230400', '460800', '921600'];
+      const strValue = String(value);
+      return validBaudrates.includes(strValue);
+    })
     .withMessage('Invalid baudrate'),
   
-  // Validación para TCP/UDP
-  body('config.host')
-    .if((value, { req }) => req.body.type === 'tcp' || req.body.type === 'udp')
+  // Validación para TCP - modo
+  body('config.mode')
+    .if(body('type').equals('tcp'))
     .optional()
-    .matches(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^localhost$/)
-    .withMessage('Invalid host format'),
+    .isString()
+    .isIn(['Cliente', 'Servidor', 'Client', 'Server'])
+    .withMessage('Mode must be Cliente/Servidor or Client/Server'),
   
-  body('config.port')
-    .if((value, { req }) => req.body.type === 'tcp' || req.body.type === 'udp')
+  // Validación para TCP - IP address (usando 'ip' en vez de 'host')
+  body('config.ip')
+    .if(body('type').equals('tcp'))
     .optional()
-    .isInt({ min: 1, max: 65535 })
+    .isString()
+    .withMessage('IP must be a string'),
+  
+  // Validación para TCP port
+  body('config.port')
+    .if(body('type').equals('tcp'))
+    .custom((value) => {
+      const numValue = typeof value === 'string' ? parseInt(value, 10) : value;
+      return Number.isInteger(numValue) && numValue >= 1 && numValue <= 65535;
+    })
+    .withMessage('Port must be between 1 and 65535'),
+  
+  // Validación para UDP - localIp, localPort, remoteIp, remotePort
+  body('config.localIp')
+    .if(body('type').equals('udp'))
+    .optional()
+    .isString()
+    .withMessage('Local IP must be a string'),
+  
+  body('config.localPort')
+    .if(body('type').equals('udp'))
+    .optional()
+    .custom((value) => {
+      const numValue = typeof value === 'string' ? parseInt(value, 10) : value;
+      return Number.isInteger(numValue) && numValue >= 1 && numValue <= 65535;
+    })
+    .withMessage('Local port must be between 1 and 65535'),
+  
+  body('config.remoteIp')
+    .if(body('type').equals('udp'))
+    .optional()
+    .isString()
+    .withMessage('Remote IP must be a string'),
+  
+  body('config.remotePort')
+    .if(body('type').equals('udp'))
+    .optional()
+    .custom((value) => {
+      const numValue = typeof value === 'string' ? parseInt(value, 10) : value;
+      return Number.isInteger(numValue) && numValue >= 1 && numValue <= 65535;
+    })
     .withMessage('Port must be between 1 and 65535'),
   
   handleValidationErrors
@@ -56,8 +103,8 @@ export const validateSaveConnections = [
     .withMessage('Connections must be an array'),
   
   body('connections.*.id')
-    .isNumeric()
-    .withMessage('Connection ID must be numeric'),
+    .custom((value) => typeof value === 'number')
+    .withMessage('Connection ID must be a number'),
   
   body('connections.*.name')
     .isString()
@@ -69,10 +116,14 @@ export const validateSaveConnections = [
     .isIn(['serial', 'tcp', 'udp'])
     .withMessage('Invalid connection type'),
   
+  body('connections.*.config')
+    .isObject()
+    .withMessage('Connection config must be an object'),
+  
   body('activeConnectionId')
     .optional()
-    .isNumeric()
-    .withMessage('Active connection ID must be numeric'),
+    .custom((value) => value === null || typeof value === 'number')
+    .withMessage('Active connection ID must be null or a number'),
   
   handleValidationErrors
 ];

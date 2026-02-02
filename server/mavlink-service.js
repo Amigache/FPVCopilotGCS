@@ -743,6 +743,17 @@ class MAVLinkService {
     }
   }
 
+  // Cancelar descarga de parámetros (sin desconectar)
+  cancelParameterDownload() {
+    console.log('🛑 Cancelando descarga de parámetros (conexión mantiene activa)')
+    this.paramDownloadComplete = true // Marcar como completo para detener procesamiento
+    
+    // Emitir estado final cancelado
+    this.emitParametersUpdate()
+    
+    return { success: true, message: 'Descarga de parámetros cancelada' }
+  }
+
   // Obtener todos los parámetros
   getParameters() {
     return {

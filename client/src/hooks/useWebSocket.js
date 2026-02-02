@@ -7,6 +7,24 @@ import apiClient from '../services/api'
 /**
  * Hook para manejar la conexión WebSocket con el servidor
  * Proporciona actualizaciones en tiempo real de vehículos, conexión y mensajes
+ * 
+ * FLUJOS DE CONEXIÓN:
+ * 1. Usuario crea nueva conexión → Al guardar, se intenta conectar automáticamente
+ * 2. Usuario presiona "Conectar" en TopBar → Intenta conectar a todas las conexiones (primero la activa)
+ * 3. Usuario presiona botón Play en un perfil → Conecta a ese perfil específico
+ * 4. Auto-conexión al cargar la app → Intenta conectar a la conexión activa guardada
+ * 5. Auto-reconexión tras pérdida → Si la desconexión NO fue manual, reintenta conectar
+ * 
+ * FLUJOS DE DESCONEXIÓN:
+ * 1. Usuario presiona "Desconectar" en TopBar → Desconexión manual, resetea UI, NO auto-reconecta
+ * 2. Usuario presiona botón en perfil de conexión → Desconexión manual, NO auto-reconecta
+ * 3. Pérdida de conexión no manual → Activa auto-reconexión automática con reintentos
+ * 
+ * LÓGICA DE AUTO-RECONEXIÓN:
+ * - Solo se activa si la desconexión NO fue manual
+ * - Espera 8 segundos entre intentos para evitar spam
+ * - Prueba todas las conexiones (primero la activa)
+ * - Solicita parámetros automáticamente al reconectar
  */
 export function useWebSocket() {
   const notify = useNotification()
@@ -32,70 +50,6 @@ export function useWebSocket() {
 
   // Obtener vehículo seleccionado actual
   const selectedVehicle = vehicles.find(v => v.systemId === selectedVehicleId) || vehicles[0] || null
-
-  const attemptReconnect = useCallback(async ({ silent = false } = {}) => {
-    if (reconnectingRef.current) return false
-    
-    // No intentar reconectar si fue desconexión manual
-    if (manualDisconnectRef.current) return false
-
-    const now = Date.now()
-    if (now - lastReconnectAtRef.current < 8000) {
-      return false
-    }
-    lastReconnectAtRef.current = now
-
-    reconnectingRef.current = true
-
-    try {
-      const response = await fetch('/api/connections')
-      const data = await response.json()
-
-      if (!data.connections || data.connections.length === 0) {
-        if (!silent) notify.warning(t('reconnect.noSavedConnections'))
-        return false
-      }
-
-      const connections = data.connections
-      const activeId = data.activeConnectionId
-
-      const ordered = activeId
-        ? [connections.find((c) => c.id === activeId), ...connections.filter((c) => c.id !== activeId)]
-        : connections
-
-      for (const connection of ordered) {
-        if (!connection) continue
-        try {
-          const response = await fetch('/api/mavlink/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: connection.type, config: connection.config })
-          })
-          const result = await response.json()
-          if (result.success) {
-            // Guardar en backend la conexión activa
-            await fetch('/api/connections/active', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ activeConnectionId: connection.id })
-            })
-            if (!silent) notify.info(t('reconnect.reconnectedWith', { name: connection.name }))
-            reconnectingRef.current = false
-            manualDisconnectRef.current = false
-            return true
-          }
-        } catch (error) {
-          // probar siguiente
-          continue
-        }
-      }
-
-      if (!silent) notify.warning(t('reconnect.noConnection'))
-      return false
-    } finally {
-      reconnectingRef.current = false
-    }
-  }, [notify])
 
   // Auto-seleccionar vehículo cuando cambia la lista
   useEffect(() => {
@@ -143,14 +97,11 @@ export function useWebSocket() {
     socket.on('connect', () => {
       console.log('✅ WebSocket conectado')
       setIsConnected(true)
-      everConnectedRef.current = true
     })
 
     socket.on('disconnect', () => {
       console.log('❌ WebSocket desconectado')
       setIsConnected(false)
-      // Solo notificar intentos de reconexión si ya hubo una conexión previa
-      attemptReconnect({ silent: !everConnectedRef.current })
     })
 
     socket.on('connect_error', (error) => {
@@ -164,6 +115,10 @@ export function useWebSocket() {
 
     socket.on('connection_status', (status) => {
       setConnectionStatus(status)
+      // Marcar que hubo al menos una conexión exitosa
+      if (status.connected) {
+        everConnectedRef.current = true
+      }
     })
 
     socket.on('system_message', (message) => {
@@ -180,13 +135,6 @@ export function useWebSocket() {
       socket.disconnect()
     }
   }, [])
-
-  useEffect(() => {
-    // No intentar reconectar si fue desconexión manual
-    if (connectionStatus.connected === false && !reconnectingRef.current && !manualDisconnectRef.current) {
-      attemptReconnect({ silent: !everConnectedRef.current })
-    }
-  }, [connectionStatus.connected, attemptReconnect])
 
   // Emitir evento al servidor (para futuros comandos)
   const emit = useCallback((event, data) => {
@@ -255,6 +203,26 @@ export function useWebSocket() {
         const isTcpServer = connection.type === 'tcp' && connection.config.mode === 'Servidor';
         if (requestParams && !isTcpServer) {
           try {
+            // En auto-conexión, esperar a que llegue el heartbeat del vehículo
+            if (isAutoConnect) {
+              console.log('⏳ Esperando heartbeat del vehículo (auto-reconexión)...');
+              
+              // Esperar hasta 5 segundos para que aparezca el vehículo
+              const maxWait = 5000;
+              const startTime = Date.now();
+              
+              while (vehicles.length === 0 && Date.now() - startTime < maxWait) {
+                await new Promise(resolve => setTimeout(resolve, 200)); // Check cada 200ms
+              }
+              
+              if (vehicles.length === 0) {
+                console.warn('⚠️ No se recibió heartbeat, solicitando parámetros de todas formas...');
+              } else {
+                console.log(`✅ Heartbeat recibido (${vehicles.length} vehículo(s))`);
+              }
+            }
+            
+            console.log('📥 Solicitando parámetros...');
             await apiClient.requestParameters();
           } catch (paramError) {
             console.warn('No se pudieron solicitar parámetros:', paramError);
@@ -276,6 +244,90 @@ export function useWebSocket() {
       return { success: false, error: error.message };
     }
   }, [notify, t, enableAutoReconnect]);
+
+  /**
+   * Intentar auto-reconexión a las conexiones guardadas
+   * Prueba primero con la conexión activa, luego con las demás
+   */
+  const attemptAutoReconnect = useCallback(async () => {
+    if (reconnectingRef.current) {
+      console.log('⏭️ Reconexión ya en progreso, saltando...');
+      return false;
+    }
+    
+    reconnectingRef.current = true;
+    
+    try {
+      const response = await fetch('/api/connections');
+      const data = await response.json();
+
+      if (!data.connections || data.connections.length === 0) {
+        console.log('⚠️ No hay conexiones guardadas para auto-reconectar');
+        return false;
+      }
+
+      const connections = data.connections;
+      const activeId = data.activeConnectionId;
+
+      // Ordenar: primero la activa, luego las demás
+      const ordered = activeId
+        ? [connections.find((c) => c.id === activeId), ...connections.filter((c) => c.id !== activeId)]
+        : connections;
+
+      // Intentar conectar a cada una hasta que funcione
+      for (const connection of ordered) {
+        if (!connection) continue;
+        
+        console.log(`🔄 Intentando auto-reconectar a: ${connection.name}`);
+        
+        const result = await connectToMavlink(connection, {
+          isAutoConnect: true,
+          silent: !everConnectedRef.current, // Solo mostrar notificación si ya hubo conexión previa
+          requestParams: true // Siempre solicitar parámetros en auto-reconexión
+        });
+        
+        if (result.success) {
+          console.log(`✅ Auto-reconexión exitosa a: ${connection.name}`);
+          manualDisconnectRef.current = false;
+          return true;
+        }
+      }
+
+      console.log('⚠️ No se pudo auto-reconectar a ninguna conexión');
+      if (everConnectedRef.current) {
+        notify.warning(t('reconnect.noConnection'));
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error en auto-reconexión:', error);
+      return false;
+    } finally {
+      reconnectingRef.current = false;
+    }
+  }, [connectToMavlink, notify, t]);
+
+  // Auto-reconexión cuando se pierde la conexión (no manual)
+  useEffect(() => {
+    // Solo auto-reconectar si:
+    // 1. Ya hubo una conexión previa exitosa (everConnectedRef)
+    // 2. No está conectado actualmente
+    // 3. No fue desconexión manual
+    // 4. No hay reconexión en progreso
+    if (connectionStatus.connected === false && 
+        everConnectedRef.current && 
+        !reconnectingRef.current && 
+        !manualDisconnectRef.current) {
+      
+      const now = Date.now();
+      if (now - lastReconnectAtRef.current < 8000) {
+        return; // Evitar reconexiones muy frecuentes
+      }
+      lastReconnectAtRef.current = now;
+      
+      console.log('🔄 Detectada desconexión no manual (hubo conexión previa), intentando reconectar...');
+      attemptAutoReconnect();
+    }
+  }, [connectionStatus.connected, attemptAutoReconnect]);
 
   /**
    * Desconectar de MAVLink de forma centralizada

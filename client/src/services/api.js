@@ -28,6 +28,10 @@ class APIClient {
       const data = await response.json();
       
       if (!response.ok) {
+        // Log validation errors for debugging
+        if (data.errors) {
+          console.error(`Validation errors for ${endpoint}:`, data.errors);
+        }
         throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
       

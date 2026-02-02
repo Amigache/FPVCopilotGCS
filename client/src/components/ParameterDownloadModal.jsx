@@ -27,11 +27,14 @@ function ParameterDownloadModal({ isOpen, onClose }) {
     if (!isOpen) return
 
     if (parametersProgress.complete && parametersProgress.received > 0 && !isCancelling) {
-      setTimeout(() => {
+      console.log('✅ Descarga de parámetros completada, cerrando modal en 1s...')
+      const timer = setTimeout(() => {
         // No es cierre manual, es automático
         closedManuallyRef.current = false
         onClose()
-      }, 1500) // Esperar 1.5s para que el usuario vea el 100%
+      }, 1000) // Esperar 1s para que el usuario vea el 100%
+      
+      return () => clearTimeout(timer)
     }
   }, [isOpen, parametersProgress.complete, parametersProgress.received, onClose, isCancelling])
 
@@ -47,11 +50,16 @@ function ParameterDownloadModal({ isOpen, onClose }) {
   const handleCancel = async () => {
     setIsCancelling(true)
     try {
-      // Desconectar para detener la descarga
-      await fetch('/api/mavlink/disconnect', { method: 'POST' })
+      // Solo cancelar la descarga, NO desconectar
+      await fetch('/api/mavlink/parameters/cancel', { method: 'POST' })
+      console.log('🛑 Descarga de parámetros cancelada (conexión activa)')
+      notify.info(t('parameterDownload.cancelled'))
       onClose()
     } catch (error) {
       console.error('Error cancelando descarga:', error)
+      notify.error(t('parameterDownload.cancelError'))
+    } finally {
+      setIsCancelling(false)
     }
   }
 

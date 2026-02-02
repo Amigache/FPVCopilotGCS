@@ -10,7 +10,7 @@ import './TopBar.css'
 function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const { t } = useTranslation()
   const notify = useNotification()
-  const { connections, getActiveConnection } = useConnections()
+  const { connections, getActiveConnection, loading, activeConnectionId } = useConnections()
   const { 
     selectedVehicle, 
     selectedVehicleId, 
@@ -28,6 +28,8 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   const [connecting, setConnecting] = useState(false)
   const [showParamDownload, setShowParamDownload] = useState(false)
   const [showFlightModeDropdown, setShowFlightModeDropdown] = useState(false)
+  const autoConnectAttemptedRef = useRef(false) // Flag para evitar múltiples autoconexiones
+  const autoConnectRunningRef = useRef(false) // Flag para prevenir ejecuciones concurrentes
   const [availableFlightModes, setAvailableFlightModes] = useState({})
   const [showArmDropdown, setShowArmDropdown] = useState(false)
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
@@ -129,21 +131,37 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   // Autoconexión al iniciar la aplicación
   useEffect(() => {
-    // Solo autoconectar si no está conectado y hay una conexión activa
+    // Solo autoconectar si no está conectado, hay una conexión activa y no se ha intentado antes
     const checkAndAutoConnect = async () => {
-      if (isConnected) return
+      if (autoConnectAttemptedRef.current || isConnected || loading || connections.length === 0) {
+        return;
+      }
       
-      const activeConnection = getActiveConnection()
-      if (activeConnection && connections.length > 0) {
+      // Si ya hay vehículos conectados, no intentar auto-conectar
+      if (vehicles.length > 0) {
+        console.log('✅ Ya hay vehículos conectados, saltando auto-conexión');
+        autoConnectAttemptedRef.current = true;
+        return;
+      }
+      
+      const activeConnection = connections.find(c => c.id === activeConnectionId);
+      if (activeConnection) {
+        autoConnectAttemptedRef.current = true; // Marcar como intentado
+        console.log('🔄 Auto-conectando a:', activeConnection.name);
         // Pequeño delay para asegurar que el WebSocket está listo
         setTimeout(() => {
-          handleAutoConnect()
-        }, 500)
+          handleAutoConnect();
+        }, 500);
       }
-    }
+    };
     
-    checkAndAutoConnect()
-  }, []) // Solo ejecutar al montar el componente
+    checkAndAutoConnect();
+    
+    // Cleanup: resetear el flag solo si está desmontando permanentemente (no Strict Mode)
+    return () => {
+      // No resetear el flag - queremos que persista entre re-montajes de Strict Mode
+    };
+  }, [isConnected, connections.length, loading, activeConnectionId, vehicles.length]); // Usar connections.length en lugar de connections
 
   // Calcular valores derivados de telemetría desde el vehículo seleccionado
   const getSignalQuality = () => {
@@ -213,14 +231,19 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   // Función para auto-conectar con la primera conexión válida
   const handleAutoConnect = async () => {
-    if (connecting || isConnected) return
+    if (connecting || isConnected || autoConnectRunningRef.current) {
+      console.log('⏭️ Ya conectado o conectando, saltando auto-conexión')
+      return
+    }
     
+    autoConnectRunningRef.current = true
     setConnecting(true)
     try {
       if (connections.length === 0) {
         console.log('No hay conexiones guardadas')
         notify.error(t('topbar.connectionError.noSavedConnections'))
         setConnecting(false)
+        autoConnectRunningRef.current = false
         return
       }
 
@@ -238,12 +261,15 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
         const result = await connectToMavlink(connection, { 
           isAutoConnect: true, 
           silent: false, 
-          requestParams: true 
+          requestParams: true
         })
         
         if (result.success) {
-          setShowParamDownload(true)
+          console.log('✅ Auto-conexión exitosa')
           setConnecting(false)
+          autoConnectRunningRef.current = false
+          // Mostrar modal de descarga de parámetros
+          setShowParamDownload(true)
           return // Salir al encontrar conexión exitosa
         }
       }
@@ -251,10 +277,12 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
       // Si llegamos aquí, no hubo conexión exitosa
       notify.error(t('topbar.connectionError.connectionFailed'))
       setConnecting(false)
+      autoConnectRunningRef.current = false
     } catch (error) {
       console.error('Error en auto-connect:', error)
       notify.error(t('topbar.connectionError.connectionFailed'))
       setConnecting(false)
+      autoConnectRunningRef.current = false
     }
   }
 
@@ -385,11 +413,12 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           disabled={connecting}
           title={isConnected ? 'Desconectar' : t('topbar.autoConnect')}
         >
-          {connecting ? (
-            <span className="spinner">⏳</span>
-          ) : (
-            isConnected ? '🔌' : '🔌'
+          {connecting && (
+            <span className="loading-spinner"></span>
           )}
+          <span className={connecting ? 'icon-connecting' : ''}>
+            {isConnected ? '🔌' : '🔌'}
+          </span>
         </button>
         <button 
           className={`settings-button ${isSettingsOpen ? 'active' : ''}`}

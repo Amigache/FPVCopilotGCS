@@ -1,0 +1,14 @@
+{
+  "watch": ["server"],
+  "ignore": [
+    "data/**",
+    "*.tmp",
+    "client/**",
+    "node_modules/**"
+  ],
+  "ext": "js,mjs,cjs,json",
+  "verbose": false,
+  "execMap": {
+    "js": "node"
+  }
+}
