@@ -152,7 +152,8 @@
     "saveError": "No se pudo guardar la conexión",
     "added": "Conexión agregada exitosamente",
     "updated": "Conexión actualizada exitosamente",
-    "deleted": "Conexión eliminada exitosamente"
+    "deleted": "Conexión eliminada exitosamente",
+    "reconnected": "Reconectado a {{name}}"
   },
   "parameters": {
     "title": "Parámetros del Vehículo",

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNotification } from './NotificationContext';
 import { useTranslation } from 'react-i18next';
+import { useWebSocketContext } from './WebSocketContext';
 import apiClient from '../services/api';
 
 const ConnectionsContext = createContext(null);
@@ -16,6 +17,7 @@ export const useConnections = () => {
 export const ConnectionsProvider = ({ children }) => {
   const notify = useNotification();
   const { t } = useTranslation();
+  const { connectionStatus, connectToMavlink } = useWebSocketContext();
 
   const [connections, setConnections] = useState([]);
   const [activeConnectionId, setActiveConnectionId] = useState(null);
@@ -24,6 +26,13 @@ export const ConnectionsProvider = ({ children }) => {
   const loadingRef = useRef(false);
   const retryCountRef = useRef(0);
   const MAX_RETRIES = 3;
+  
+  // Auto-reconexión
+  const everConnectedRef = useRef(false);
+  const reconnectingRef = useRef(false);
+  const lastReconnectAtRef = useRef(0);
+  const manualDisconnectRef = useRef(false);
+  const initializedRef = useRef(false); // Prevenir reconexión durante inicialización
 
   /**
    * Cargar conexiones desde el backend con retry logic
@@ -180,7 +189,99 @@ export const ConnectionsProvider = ({ children }) => {
   // Cargar conexiones al montar
   useEffect(() => {
     loadConnections();
+    
+    // Marcar como inicializado después de 2 segundos (tiempo para que el cliente se sincronice)
+    const timer = setTimeout(() => {
+      initializedRef.current = true;
+      console.log('✅ ConnectionsContext inicializado, auto-reconexión habilitada');
+    }, 2000);
+    
+    return () => clearTimeout(timer);
   }, [loadConnections]);
+
+  // Auto-reconexión cuando se pierde la conexión (no manual)
+  useEffect(() => {
+    // Solo auto-reconectar si:
+    // 1. El sistema ya se inicializó (no es el montaje inicial)
+    // 2. Ya hubo una conexión exitosa previa
+    // 3. No está conectado actualmente
+    // 4. No fue desconexión manual
+    // 5. No hay reconexión en progreso
+    // 6. Hay una conexión activa configurada
+    if (connectionStatus.connected === false && 
+        initializedRef.current &&
+        everConnectedRef.current && 
+        !manualDisconnectRef.current &&
+        !reconnectingRef.current &&
+        activeConnectionId !== null) {
+      
+      // Throttle: evitar reconexiones muy frecuentes
+      const now = Date.now();
+      if (now - lastReconnectAtRef.current < 8000) {
+        return;
+      }
+      lastReconnectAtRef.current = now;
+      
+      console.log('🔄 Detectada desconexión no manual, intentando reconectar...');
+      attemptAutoReconnect();
+    }
+  }, [connectionStatus.connected, activeConnectionId]);
+
+  // Función de auto-reconexión
+  const attemptAutoReconnect = useCallback(async () => {
+    if (reconnectingRef.current) {
+      console.log('⏭️ Reconexión ya en progreso');
+      return;
+    }
+
+    reconnectingRef.current = true;
+
+    try {
+      // Intentar reconectar con la conexión activa
+      const activeConnection = connections.find(c => c.id === activeConnectionId);
+      
+      if (!activeConnection) {
+        console.warn('⚠️ No hay conexión activa para reconectar');
+        reconnectingRef.current = false;
+        return;
+      }
+
+      console.log(`🔄 Intentando reconectar a: ${activeConnection.name}`);
+      
+      const result = await connectToMavlink(activeConnection, { 
+        isAutoConnect: true, 
+        silent: true,
+        requestParams: false // No solicitar parámetros en auto-reconexión
+      });
+      
+      if (result.success) {
+        console.log(`✅ Reconexión exitosa a: ${activeConnection.name}`);
+        notify.success(t('connections.reconnected', { name: activeConnection.name }));
+      } else {
+        console.warn(`⚠️ Falló reconexión a: ${activeConnection.name}`);
+        // Reintentar en 5 segundos
+        setTimeout(() => {
+          reconnectingRef.current = false;
+          attemptAutoReconnect();
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('❌ Error en auto-reconexión:', error);
+      reconnectingRef.current = false;
+    } finally {
+      if (connectionStatus.connected) {
+        reconnectingRef.current = false;
+      }
+    }
+  }, [connections, activeConnectionId, connectToMavlink, connectionStatus.connected, notify, t]);
+
+  // Marcar cuando hay una conexión exitosa
+  useEffect(() => {
+    if (connectionStatus.connected) {
+      everConnectedRef.current = true;
+      manualDisconnectRef.current = false;
+    }
+  }, [connectionStatus.connected]);
 
   const value = {
     // Estado
@@ -200,7 +301,10 @@ export const ConnectionsProvider = ({ children }) => {
     // Utilidades
     getConnection,
     getActiveConnection,
-    isActive
+    isActive,
+    
+    // Auto-reconexión
+    setManualDisconnect: (value) => { manualDisconnectRef.current = value; }
   };
 
   return (

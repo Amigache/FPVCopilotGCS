@@ -131,37 +131,40 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   // Autoconexión al iniciar la aplicación
   useEffect(() => {
-    // Solo autoconectar si no está conectado, hay una conexión activa y no se ha intentado antes
     const checkAndAutoConnect = async () => {
-      if (autoConnectAttemptedRef.current || isConnected || loading || connections.length === 0) {
+      if (autoConnectAttemptedRef.current || loading || connections.length === 0) {
         return;
       }
       
-      // Si ya hay vehículos conectados, no intentar auto-conectar
-      if (vehicles.length > 0) {
-        console.log('✅ Ya hay vehículos conectados, saltando auto-conexión');
-        autoConnectAttemptedRef.current = true;
-        return;
+      // Marcar inmediatamente para evitar ejecuciones duplicadas
+      autoConnectAttemptedRef.current = true;
+      
+      // Esperar a que el WebSocket se conecte
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      try {
+        // Consultar al servidor si ya tiene conexión MAVLink activa
+        const response = await fetch('/api/mavlink/status');
+        const status = await response.json();
+        
+        if (status.connected && status.vehicles && status.vehicles.length > 0) {
+          console.log('✅ Servidor mantiene conexión MAVLink activa (F5), sincronizando...');
+          return;
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo verificar estado del servidor:', error);
       }
       
+      // Si no hay conexión activa, intentar auto-conectar (primera carga)
       const activeConnection = connections.find(c => c.id === activeConnectionId);
-      if (activeConnection) {
-        autoConnectAttemptedRef.current = true; // Marcar como intentado
-        console.log('🔄 Auto-conectando a:', activeConnection.name);
-        // Pequeño delay para asegurar que el WebSocket está listo
-        setTimeout(() => {
-          handleAutoConnect();
-        }, 500);
+      if (activeConnection && !isConnected && !autoConnectRunningRef.current) {
+        console.log('🔄 Primera carga sin conexión, auto-conectando a:', activeConnection.name);
+        handleAutoConnect();
       }
     };
     
     checkAndAutoConnect();
-    
-    // Cleanup: resetear el flag solo si está desmontando permanentemente (no Strict Mode)
-    return () => {
-      // No resetear el flag - queremos que persista entre re-montajes de Strict Mode
-    };
-  }, [isConnected, connections.length, loading, activeConnectionId, vehicles.length]); // Usar connections.length en lugar de connections
+  }, [isConnected, connections.length, loading, activeConnectionId]);
 
   // Calcular valores derivados de telemetría desde el vehículo seleccionado
   const getSignalQuality = () => {

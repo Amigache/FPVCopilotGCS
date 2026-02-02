@@ -351,29 +351,37 @@
 }
 
 .accordion-card {
-  background: rgba(15, 52, 96, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(15, 52, 96, 0.4), rgba(22, 33, 62, 0.5));
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .accordion-card.expanded {
-  background: rgba(15, 52, 96, 0.4);
+  background: linear-gradient(145deg, rgba(15, 52, 96, 0.6), rgba(22, 33, 62, 0.7));
+  border-color: rgba(33, 150, 243, 0.4);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.15);
 }
 
 .accordion-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
+  border-bottom: 1px solid transparent;
+}
+
+.accordion-card.expanded .accordion-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .accordion-header:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(33, 150, 243, 0.08);
 }
 
 .accordion-title {
@@ -383,15 +391,17 @@
 }
 
 .accordion-icon {
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .accordion-header h4 {
   margin: 0;
   color: #fff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .accordion-arrow {
@@ -401,7 +411,7 @@
 }
 
 .accordion-body {
-  padding: 16px;
+  padding: 10px;
   padding-top: 0;
   animation: slideDown 0.3s ease;
 }
@@ -420,13 +430,25 @@
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 3px;
 }
 
 .info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
+  padding: 4px 5px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.info-item:hover {
+  background: rgba(33, 150, 243, 0.1);
+  border-color: rgba(33, 150, 243, 0.3);
+  transform: translateY(-1px);
 }
 
 .info-item.full-width {
@@ -434,17 +456,21 @@
 }
 
 .info-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
+  font-size: 7px;
+  color: rgba(33, 150, 243, 0.8);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  line-height: 1;
 }
 
 .info-value {
-  font-size: 14px;
+  font-size: 10px;
   color: #fff;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  line-height: 1.1;
 }
 
 .info-badge {
@@ -468,40 +494,43 @@
 /* Botón de configuración del vehículo */
 .configure-vehicle-btn {
   width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  margin-top: 8px;
+  padding: 9px 12px;
+  background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
   color: #ffffff;
-  border: none;
+  border: 1px solid rgba(33, 150, 243, 0.3);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+  gap: 6px;
 }
 
 .configure-vehicle-btn:hover {
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.5);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.5);
+  transform: translateY(-2px);
+  border-color: rgba(33, 150, 243, 0.5);
 }
 
 .configure-vehicle-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.4);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
 }
 
 .configure-vehicle-btn .btn-icon {
-  font-size: 18px;
+  font-size: 14px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .configure-vehicle-btn .btn-text {
-  font-size: 14px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
 }
 
 /* Grid de acciones */

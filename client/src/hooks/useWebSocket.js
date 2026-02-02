@@ -34,6 +34,7 @@ export function useWebSocket() {
   const lastReconnectAtRef = useRef(0)
   const everConnectedRef = useRef(false)
   const manualDisconnectRef = useRef(false)
+  const isMountedRef = useRef(true) // Rastrear si el componente está montado
   const [isConnected, setIsConnected] = useState(false)
   const [vehicles, setVehicles] = useState([])
   const [connectionStatus, setConnectionStatus] = useState({ connected: false })
@@ -67,6 +68,8 @@ export function useWebSocket() {
     // Conectar al WebSocket del servidor
     // En desarrollo: usa localhost:3000
     // En producción: usa variable de entorno o construye URL con puerto 3000
+    isMountedRef.current = true // Marcar como montado al iniciar
+    
     let serverUrl
     if (import.meta.env.PROD) {
       // Si hay una variable de entorno definida, usarla
@@ -132,6 +135,8 @@ export function useWebSocket() {
     // Cleanup
     return () => {
       console.log('🔌 Desconectando WebSocket')
+      isMountedRef.current = false // Marcar como desmontado
+      everConnectedRef.current = false // Resetear para evitar auto-reconexión en re-montaje
       socket.disconnect()
     }
   }, [])
@@ -307,16 +312,21 @@ export function useWebSocket() {
   }, [connectToMavlink, notify, t]);
 
   // Auto-reconexión cuando se pierde la conexión (no manual)
+  // DESHABILITADO - La auto-conexión inicial la maneja TopBar
+  // Este useEffect causaba conexiones duplicadas en el montaje
+  /*
   useEffect(() => {
     // Solo auto-reconectar si:
     // 1. Ya hubo una conexión previa exitosa (everConnectedRef)
     // 2. No está conectado actualmente
     // 3. No fue desconexión manual
     // 4. No hay reconexión en progreso
+    // 5. El componente está montado (no es desmontaje de Strict Mode)
     if (connectionStatus.connected === false && 
         everConnectedRef.current && 
         !reconnectingRef.current && 
-        !manualDisconnectRef.current) {
+        !manualDisconnectRef.current &&
+        isMountedRef.current) {
       
       const now = Date.now();
       if (now - lastReconnectAtRef.current < 8000) {
@@ -328,6 +338,7 @@ export function useWebSocket() {
       attemptAutoReconnect();
     }
   }, [connectionStatus.connected, attemptAutoReconnect]);
+  */
 
   /**
    * Desconectar de MAVLink de forma centralizada

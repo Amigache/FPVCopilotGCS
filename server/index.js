@@ -137,6 +137,16 @@ app.get('/api/status', (req, res) => {
 });
 
 // MAVLink Connection Routes
+app.get('/api/mavlink/status', (req, res) => {
+  const status = mavlinkService.getStatus();
+  const vehicles = mavlinkService.getAllVehicles();
+  res.json({ 
+    ...status,
+    vehicles,
+    vehicleCount: vehicles.length
+  });
+});
+
 app.post('/api/mavlink/connect', mavlinkConnectLimiter, validateMavlinkConnect, async (req, res) => {
   const { type, config } = req.body;
   const result = await mavlinkService.connect(type, config);

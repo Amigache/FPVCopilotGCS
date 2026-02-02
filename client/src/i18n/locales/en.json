@@ -150,7 +150,8 @@
     "saveError": "Could not save connection",
     "added": "Connection added successfully",
     "updated": "Connection updated successfully",
-    "deleted": "Connection deleted successfully"
+    "deleted": "Connection deleted successfully",
+    "reconnected": "Reconnected to {{name}}"
   },
   "parameters": {
     "title": "Vehicle Parameters",

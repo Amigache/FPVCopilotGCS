@@ -495,7 +495,7 @@ function MainContent({ onVehicleConfigClick, onArmDisarmRequest }) {
                                     <span className="info-value">#{vehicle.systemId}</span>
                                   </div>
                                   {vehicle.lat && vehicle.lon && (
-                                    <div className="info-item full-width">
+                                    <div className="info-item">
                                       <span className="info-label">{t('sidebar.position')}:</span>
                                       <span className="info-value">{vehicle.lat.toFixed(6)}, {vehicle.lon.toFixed(6)}</span>
                                     </div>
