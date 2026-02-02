@@ -42,7 +42,7 @@ function SystemInfo() {
 
   const fetchSystemInfo = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/system/info')
+      const response = await fetch('/api/system/info')
       const data = await response.json()
       setSystemInfo(data)
     } catch (err) {
@@ -54,7 +54,7 @@ function SystemInfo() {
 
   const fetchDisplayInfo = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/system/display')
+      const response = await fetch('/api/system/display')
       const data = await response.json()
       setDisplayInfo(data)
     } catch (err) {
@@ -64,7 +64,7 @@ function SystemInfo() {
 
   const fetchDevices = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/system/devices')
+      const response = await fetch('/api/system/devices')
       const data = await response.json()
       setDevices(data)
     } catch (err) {
@@ -74,7 +74,7 @@ function SystemInfo() {
 
   const fetchNetworkInfo = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/system/network')
+      const response = await fetch('/api/system/network')
       const data = await response.json()
       setNetworkInfo(data)
     } catch (err) {
@@ -84,7 +84,7 @@ function SystemInfo() {
 
   const fetchWifiStatus = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/wifi/status')
+      const response = await fetch('/api/wifi/status')
       const data = await response.json()
       setWifiStatus(data)
     } catch (err) {
@@ -95,7 +95,7 @@ function SystemInfo() {
   const scanWifiNetworks = async () => {
     setWifiScanning(true)
     try {
-      const response = await fetch('http://localhost:3000/api/wifi/scan')
+      const response = await fetch('/api/wifi/scan')
       const data = await response.json()
       setWifiNetworks(data.networks || [])
     } catch (err) {
@@ -111,7 +111,7 @@ function SystemInfo() {
     
     setWifiConnecting(true)
     try {
-      const response = await fetch('http://localhost:3000/api/wifi/connect', {
+      const response = await fetch('/api/wifi/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +139,7 @@ function SystemInfo() {
 
   const disconnectWifi = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/wifi/disconnect', {
+      const response = await fetch('/api/wifi/disconnect', {
         method: 'POST'
       })
       const data = await response.json()
@@ -159,7 +159,7 @@ function SystemInfo() {
 
   const forgetNetwork = async (ssid) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/wifi/forget/${encodeURIComponent(ssid)}`, {
+      const response = await fetch(`/api/wifi/forget/${encodeURIComponent(ssid)}`, {
         method: 'DELETE'
       })
       const data = await response.json()

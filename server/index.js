@@ -10,6 +10,22 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import os from 'os';
 import mavlinkService from './mavlink-service.js';
+import { 
+  apiLimiter, 
+  systemCommandLimiter, 
+  wifiScanLimiter, 
+  mavlinkConnectLimiter 
+} from './middleware/rateLimiter.js';
+import {
+  validateMavlinkConnect,
+  validateSaveConnections,
+  validateActiveConnection,
+  validateWifiConnect,
+  validateWifiForget,
+  validateSetParameter,
+  validateFlightMode,
+  validateMavlinkCommand
+} from './middleware/validation.js';
 
 const execPromise = promisify(exec);
 
@@ -18,9 +34,27 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
+
+// Configurar orígenes permitidos para CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' ? '*' : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: process.env.NODE_ENV === 'production' 
+      ? (origin, callback) => {
+          // En producción, solo permitir mismo origen o whitelist
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        }
+      : allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -52,8 +86,21 @@ io.on('connection', (socket) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    : allowedOrigins,
+  credentials: true
+}));
 app.use(express.json());
+
+// API Routes (sin rate limiting general - solo específico por endpoint crítico)
 
 // API Routes
 app.get('/api/status', (req, res) => {
@@ -65,7 +112,7 @@ app.get('/api/status', (req, res) => {
 });
 
 // MAVLink Connection Routes
-app.post('/api/mavlink/connect', async (req, res) => {
+app.post('/api/mavlink/connect', mavlinkConnectLimiter, validateMavlinkConnect, async (req, res) => {
   const { type, config } = req.body;
   const result = await mavlinkService.connect(type, config);
   res.json(result);
@@ -83,12 +130,12 @@ app.get('/api/mavlink/status', (req, res) => {
 });
 
 // System power Routes
-app.post('/api/system/reboot', (req, res) => {
+app.post('/api/system/reboot', systemCommandLimiter, (req, res) => {
   console.log('🔄 Reboot requested')
   res.json({ success: true, message: 'Rebooting system...' })
-  // Ejecutar el comando después de enviar la respuesta
+  // Ejecutar el comando después de enviar la respuesta con timeout
   setTimeout(() => {
-    exec('sudo reboot', (error, stdout, stderr) => {
+    exec('sudo reboot', { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
         console.error('Error rebooting:', error)
         console.error('stderr:', stderr)
@@ -98,12 +145,12 @@ app.post('/api/system/reboot', (req, res) => {
   }, 500)
 });
 
-app.post('/api/system/shutdown', (req, res) => {
+app.post('/api/system/shutdown', systemCommandLimiter, (req, res) => {
   console.log('⏻ Shutdown requested')
   res.json({ success: true, message: 'Shutting down system...' })
-  // Ejecutar el comando después de enviar la respuesta
+  // Ejecutar el comando después de enviar la respuesta con timeout
   setTimeout(() => {
-    exec('sudo poweroff', (error, stdout, stderr) => {
+    exec('sudo poweroff', { timeout: 5000 }, (error, stdout, stderr) => {
       if (error) {
         console.error('Error shutting down:', error)
         console.error('stderr:', stderr)
@@ -128,7 +175,7 @@ app.get('/api/connections', async (req, res) => {
   }
 });
 
-app.post('/api/connections', async (req, res) => {
+app.post('/api/connections', validateSaveConnections, async (req, res) => {
   try {
     const { connections, activeConnectionId } = req.body;
     await writeFile(CONNECTIONS_FILE, JSON.stringify({ connections, activeConnectionId }, null, 2));
@@ -140,7 +187,7 @@ app.post('/api/connections', async (req, res) => {
 });
 
 // Update only activeConnectionId
-app.patch('/api/connections/active', async (req, res) => {
+app.patch('/api/connections/active', validateActiveConnection, async (req, res) => {
   try {
     const { activeConnectionId } = req.body;
     let data = { connections: [], activeConnectionId: null };
@@ -176,7 +223,7 @@ app.get('/api/mavlink/parameters/status', (req, res) => {
   res.json(status)
 })
 
-app.post('/api/mavlink/parameters/set', async (req, res) => {
+app.post('/api/mavlink/parameters/set', validateSetParameter, async (req, res) => {
   const { name, value } = req.body;
   const result = await mavlinkService.setParameter(name, value);
   res.json(result);
@@ -200,7 +247,7 @@ app.get('/api/mavlink/vehicles/:systemId', (req, res) => {
 });
 
 // MAVLink Command Routes
-app.post('/api/mavlink/command/:action', async (req, res) => {
+app.post('/api/mavlink/command/:action', validateMavlinkCommand, async (req, res) => {
   const { action } = req.params;
   const { systemId } = req.body;
   
@@ -216,7 +263,7 @@ app.post('/api/mavlink/command/:action', async (req, res) => {
 });
 
 // Cambiar modo de vuelo
-app.post('/api/mavlink/flightmode', async (req, res) => {
+app.post('/api/mavlink/flightmode', validateFlightMode, async (req, res) => {
   const { systemId, customMode } = req.body;
   
   try {
@@ -473,13 +520,13 @@ app.get('/api/serial/ports', async (req, res) => {
 });
 
 // WiFi Management Routes
-app.get('/api/wifi/scan', async (req, res) => {
+app.get('/api/wifi/scan', wifiScanLimiter, async (req, res) => {
   try {
     // Intentar con nmcli primero (NetworkManager)
     try {
       // Primero forzar un rescan (requiere sudo)
       try {
-        await execPromise('sudo nmcli dev wifi rescan');
+        await execPromise('sudo nmcli dev wifi rescan', { timeout: 10000 });
         // Esperar suficiente tiempo para que complete el escaneo
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (rescanError) {
@@ -487,7 +534,7 @@ app.get('/api/wifi/scan', async (req, res) => {
         console.error('Rescan error:', rescanError.message);
       }
 
-      const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list');
+      const { stdout } = await execPromise('nmcli -t -f SSID,SIGNAL,SECURITY,IN-USE dev wifi list', { timeout: 10000 });
       
       const lines = stdout.trim().split('\n');
       
@@ -577,13 +624,9 @@ app.get('/api/wifi/status', async (req, res) => {
   }
 });
 
-app.post('/api/wifi/connect', async (req, res) => {
+app.post('/api/wifi/connect', validateWifiConnect, async (req, res) => {
   try {
     const { ssid, password } = req.body;
-    
-    if (!ssid) {
-      return res.status(400).json({ success: false, message: 'SSID requerido' });
-    }
 
     // Intentar conectar con nmcli
     try {
@@ -594,7 +637,7 @@ app.post('/api/wifi/connect', async (req, res) => {
         command = `nmcli dev wifi connect "${ssid}"`;
       }
       
-      const { stdout, stderr } = await execPromise(command);
+      const { stdout, stderr } = await execPromise(command, { timeout: 30000 });
       
       if (stderr && !stdout) {
         throw new Error(stderr);
@@ -632,10 +675,10 @@ app.post('/api/wifi/disconnect', async (req, res) => {
   }
 });
 
-app.delete('/api/wifi/forget/:ssid', async (req, res) => {
+app.delete('/api/wifi/forget/:ssid', validateWifiForget, async (req, res) => {
   try {
     const { ssid } = req.params;
-    const { stdout } = await execPromise(`nmcli connection delete "${ssid}"`);
+    const { stdout } = await execPromise(`nmcli connection delete "${ssid}"`, { timeout: 10000 });
     res.json({ 
       success: true, 
       message: `Red ${ssid} olvidada`,
