@@ -388,6 +388,7 @@
     "title": "⏬ Downloading Parameters",
     "parameters": "parameters",
     "complete": "✓ Download complete",
+    "completeBackground": "✓ Parameter download completed ({{count}} parameters)",
     "continueBackground": "Close (continue in background)",
     "cancel": "Cancel download",
     "cancelling": "Cancelling..."
@@ -549,6 +550,19 @@
   },
   "systemInfo": {
     "title": "System Information",
+    "power": {
+      "title": "Power Management",
+      "reboot": "Reboot",
+      "shutdown": "Shutdown",
+      "confirmReboot": "Confirm Reboot",
+      "confirmShutdown": "Confirm Shutdown",
+      "rebootMessage": "The system will restart. Are you sure?",
+      "shutdownMessage": "The system will shut down. Are you sure?",
+      "rebooting": "Rebooting system...",
+      "shuttingDown": "Shutting down system...",
+      "rebootError": "Error rebooting the system",
+      "shutdownError": "Error shutting down the system"
+    },
     "description": "Detailed information about the operating system, hardware and connected devices",
     "loading": "Loading system information...",
     "error": "Error loading information",

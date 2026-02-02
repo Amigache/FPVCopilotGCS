@@ -1,23 +1,48 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
+import { useNotification } from '../contexts/NotificationContext'
 import './ParameterDownloadModal.css'
 
 function ParameterDownloadModal({ isOpen, onClose }) {
   const { t } = useTranslation()
+  const notify = useNotification()
   const { parametersProgress } = useWebSocketContext()
   const [isCancelling, setIsCancelling] = useState(false)
+  const wasOpenRef = useRef(false)
+  const notifiedRef = useRef(false)
+  const closedManuallyRef = useRef(false)
 
+  // Rastrear si el modal estuvo abierto
+  useEffect(() => {
+    if (isOpen) {
+      wasOpenRef.current = true
+      notifiedRef.current = false
+      closedManuallyRef.current = false
+    }
+  }, [isOpen])
+
+  // Cerrar automáticamente cuando se complete (si está abierto)
   useEffect(() => {
     if (!isOpen) return
 
-    // Cerrar automáticamente cuando se complete
     if (parametersProgress.complete && parametersProgress.received > 0 && !isCancelling) {
       setTimeout(() => {
+        // No es cierre manual, es automático
+        closedManuallyRef.current = false
         onClose()
       }, 1500) // Esperar 1.5s para que el usuario vea el 100%
     }
   }, [isOpen, parametersProgress.complete, parametersProgress.received, onClose, isCancelling])
+
+  // Notificar cuando se complete en background (modal cerrado manualmente)
+  useEffect(() => {
+    if (!isOpen && wasOpenRef.current && closedManuallyRef.current && parametersProgress.complete && parametersProgress.received > 0 && !notifiedRef.current) {
+      notify.success(t('parameterDownload.completeBackground', { count: parametersProgress.received }))
+      notifiedRef.current = true
+      wasOpenRef.current = false
+    }
+  }, [isOpen, parametersProgress.complete, parametersProgress.received, notify, t])
 
   const handleCancel = async () => {
     setIsCancelling(true)
@@ -31,7 +56,8 @@ function ParameterDownloadModal({ isOpen, onClose }) {
   }
 
   const handleCloseBackground = () => {
-    // Cerrar el modal pero dejar que la descarga continúe
+    // Cerrar el modal manualmente - marcar para notificar cuando complete
+    closedManuallyRef.current = true
     onClose()
   }
 

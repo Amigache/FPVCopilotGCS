@@ -22,42 +22,45 @@ function Connections() {
     name: '',
     type: 'serial',
     config: {
-      port: '/dev/ttyUSB0',
+      port: '/dev/ttyACM0',
       baudrate: '115200'
     }
   })
 
-  // Cargar conexiones guardadas al iniciar
+  // Cargar conexiones guardadas al iniciar desde el backend
   useEffect(() => {
-    const savedConnections = localStorage.getItem('mavlink_connections')
-    if (savedConnections) {
-      const parsedConnections = JSON.parse(savedConnections)
-      setConnections(parsedConnections)
-      
-      // Verificar si hay una conexión activa guardada (solo para mostrar el estado)
-      const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
-      if (savedActiveConnection) {
-        const activeId = JSON.parse(savedActiveConnection)
-        setActiveConnection(activeId)
+    const loadConnections = async () => {
+      try {
+        const response = await fetch('/api/connections')
+        const data = await response.json()
+        if (data.connections) {
+          setConnections(data.connections)
+        }
+        if (data.activeConnectionId) {
+          setActiveConnection(data.activeConnectionId)
+        }
+      } catch (error) {
+        console.error('Error cargando conexiones:', error)
       }
     }
+    loadConnections()
   }, [])
 
-  // Guardar conexiones cuando cambien
-  useEffect(() => {
-    if (connections.length > 0) {
-      localStorage.setItem('mavlink_connections', JSON.stringify(connections))
+  // Guardar conexiones y activeConnection cuando cambien
+  const saveConnectionsToBackend = async (newConnections, newActiveId) => {
+    try {
+      await fetch('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connections: newConnections,
+          activeConnectionId: newActiveId
+        })
+      })
+    } catch (error) {
+      console.error('Error guardando conexiones:', error)
     }
-  }, [connections])
-  
-  // Guardar activeConnection cuando cambie
-  useEffect(() => {
-    if (activeConnection !== null) {
-      localStorage.setItem('mavlink_active_connection', JSON.stringify(activeConnection))
-    } else {
-      localStorage.removeItem('mavlink_active_connection')
-    }
-  }, [activeConnection])
+  }
 
   const handleDisconnect = async () => {
     try {
@@ -68,9 +71,15 @@ function Connections() {
       const result = await response.json()
       
       if (result.success) {
-        // Limpiar estado inmediatamente
+        // Limpiar estado local
         setActiveConnection(null)
-        localStorage.removeItem('mavlink_active_connection')
+        
+        // Actualizar solo activeConnectionId en backend
+        await fetch('/api/connections/active', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeConnectionId: null })
+        })
         
         // No mostrar modal, la desconexión es silenciosa
         console.log('Desconectado exitosamente')
@@ -99,9 +108,15 @@ function Connections() {
       const result = await response.json()
       
       if (result.success) {
-        // Establecer como conexión activa
+        // Establecer como conexión activa localmente
         setActiveConnection(connection.id)
-        localStorage.setItem('mavlink_active_connection', JSON.stringify(connection.id))
+        
+        // Actualizar solo activeConnectionId en backend (más eficiente)
+        await fetch('/api/connections/active', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeConnectionId: connection.id })
+        })
         
         if (!isAutoConnect) {
           console.log('Conexión establecida:', connection.name)
@@ -141,7 +156,11 @@ function Connections() {
         }
       } else {
         setActiveConnection(null)
-        localStorage.removeItem('mavlink_active_connection')
+        await fetch('/api/connections/active', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeConnectionId: null })
+        })
         
         if (!isAutoConnect) {
           notify.error(result.message || t('connections.messages.connectionFailed'))
@@ -150,7 +169,11 @@ function Connections() {
     } catch (error) {
       console.error('Error conectando:', error)
       setActiveConnection(null)
-      localStorage.removeItem('mavlink_active_connection')
+      await fetch('/api/connections/active', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeConnectionId: null })
+      })
       
       if (!isAutoConnect) {
         notify.error(t('connections.messages.serverNotAvailable'))
@@ -160,7 +183,7 @@ function Connections() {
     }
   }
 
-  const handleAddConnection = () => {
+  const handleAddConnection = async () => {
     if (!newConnection.name.trim()) {
       notify.error(t('connections.messages.nameRequired'))
       return
@@ -174,8 +197,8 @@ function Connections() {
     const updatedConnections = [...connections, connection]
     setConnections(updatedConnections)
     
-    // Guardar inmediatamente en localStorage
-    localStorage.setItem('mavlink_connections', JSON.stringify(updatedConnections))
+    // Guardar inmediatamente en backend
+    await saveConnectionsToBackend(updatedConnections, activeConnection)
     
     setShowAddModal(false)
     
@@ -189,23 +212,23 @@ function Connections() {
       name: '', 
       type: 'serial', 
       config: {
-        port: '/dev/ttyUSB0',
+        port: '/dev/ttyACM0',
         baudrate: '115200'
       }
     })
   }
 
-  const handleDeleteConnection = (id) => {
+  const handleDeleteConnection = async (id) => {
     // Si es la conexión activa, desconectar primero
     if (activeConnection === id) {
-      handleDisconnect()
+      await handleDisconnect()
     }
     
     const updatedConnections = connections.filter(conn => conn.id !== id)
     setConnections(updatedConnections)
     
-    // Actualizar localStorage inmediatamente
-    localStorage.setItem('mavlink_connections', JSON.stringify(updatedConnections))
+    // Actualizar backend inmediatamente
+    await saveConnectionsToBackend(updatedConnections, activeConnection === id ? null : activeConnection)
   }
 
   // Función para abrir el teclado en pantalla
@@ -242,8 +265,10 @@ function Connections() {
       const data = await response.json()
       if (data.success && data.ports.length > 0) {
         setSerialPorts(data.ports)
-        // Si hay puertos disponibles y no hay uno seleccionado, usar el primero
-        if (!newConnection.config.port && data.ports.length > 0) {
+        // Usar el primer puerto detectado si el actual no está en la lista
+        const currentPort = newConnection.config.port
+        const portExists = data.ports.some(p => p.path === currentPort)
+        if (!portExists) {
           setNewConnection({
             ...newConnection,
             config: { ...newConnection.config, port: data.ports[0].path }
@@ -277,7 +302,7 @@ function Connections() {
               <div className="serial-port-selector">
                 <select 
                   className="form-input"
-                  value={newConnection.config.port || '/dev/ttyUSB0'}
+                  value={newConnection.config.port || '/dev/ttyACM0'}
                   onChange={(e) => setNewConnection({
                     ...newConnection,
                     config: { ...newConnection.config, port: e.target.value }
@@ -294,8 +319,8 @@ function Connections() {
                     ))
                   ) : (
                     <>
-                      <option>/dev/ttyUSB0</option>
                       <option>/dev/ttyACM0</option>
+                      <option>/dev/ttyUSB0</option>
                       <option>/dev/ttyAMA0</option>
                     </>
                   )}
@@ -589,7 +614,7 @@ function Connections() {
                   // Establecer valores por defecto según el tipo
                   switch(type) {
                     case 'serial':
-                      defaultConfig = { port: '/dev/ttyUSB0', baudrate: '115200' }
+                      defaultConfig = { port: '/dev/ttyACM0', baudrate: '115200' }
                       break
                     case 'tcp':
                       defaultConfig = { mode: 'Cliente', ip: '127.0.0.1', port: '5760' }
@@ -623,7 +648,7 @@ function Connections() {
                     name: '', 
                     type: 'serial', 
                     config: {
-                      port: '/dev/ttyUSB0',
+                      port: '/dev/ttyACM0',
                       baudrate: '115200'
                     }
                   })

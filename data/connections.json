@@ -1,0 +1,14 @@
+{
+  "connections": [
+    {
+      "id": 1769989389595,
+      "name": "Ap",
+      "type": "serial",
+      "config": {
+        "port": "/dev/ttyACM0",
+        "baudrate": "115200"
+      }
+    }
+  ],
+  "activeConnectionId": null
+}

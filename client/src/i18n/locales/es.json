@@ -388,6 +388,7 @@
     "title": "⏬ Descargando Parámetros",
     "parameters": "parámetros",
     "complete": "✓ Descarga completa",
+    "completeBackground": "✓ Descarga de parámetros completada ({{count}} parámetros)",
     "continueBackground": "Cerrar (continuar en background)",
     "cancel": "Cancelar descarga",
     "cancelling": "Cancelando..."
@@ -549,6 +550,19 @@
   },
   "systemInfo": {
     "title": "Información del Sistema",
+    "power": {
+      "title": "Gestión de Energía",
+      "reboot": "Reiniciar",
+      "shutdown": "Apagar",
+      "confirmReboot": "Confirmar Reinicio",
+      "confirmShutdown": "Confirmar Apagado",
+      "rebootMessage": "El sistema se reiniciará. ¿Está seguro?",
+      "shutdownMessage": "El sistema se apagará. ¿Está seguro?",
+      "rebooting": "Reiniciando sistema...",
+      "shuttingDown": "Apagando sistema...",
+      "rebootError": "Error al reiniciar el sistema",
+      "shutdownError": "Error al apagar el sistema"
+    },
     "description": "Información detallada sobre el sistema operativo, hardware y dispositivos conectados",
     "loading": "Cargando información del sistema...",
     "error": "Error al cargar la información",

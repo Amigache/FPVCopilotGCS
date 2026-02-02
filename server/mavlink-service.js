@@ -693,9 +693,19 @@ class MAVLinkService {
     this.parameters.clear()
     this.vehicles.clear()
     
-    // Emitir cambio de estado de conexión
-    this.emitVehiclesUpdate()
+    // Resetear estado de parámetros
+    this.paramCount = 0
+    this.receivedParams = 0
+    this.paramDownloadComplete = false
+    
+    // Limpiar mensajes del sistema
+    this.messages = []
+    
+    // Emitir cambio de estado de conexión y vehículos vacíos
     this.emitConnectionStatus()
+    this.emitVehiclesUpdate()
+    
+    console.log('🔌 MAVLink desconectado - estado resetado')
   }
 
   // Solicitar todos los parámetros del vehículo

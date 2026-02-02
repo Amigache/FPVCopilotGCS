@@ -47,21 +47,17 @@ export function useWebSocket() {
     reconnectingRef.current = true
 
     try {
-      const savedConnectionsRaw = localStorage.getItem('mavlink_connections')
-      const savedActiveRaw = localStorage.getItem('mavlink_active_connection')
+      const response = await fetch('/api/connections')
+      const data = await response.json()
 
-      if (!savedConnectionsRaw) {
+      if (!data.connections || data.connections.length === 0) {
         if (!silent) notify.warning(t('reconnect.noSavedConnections'))
         return false
       }
 
-      const connections = JSON.parse(savedConnectionsRaw) || []
-      if (connections.length === 0) {
-        if (!silent) notify.warning(t('reconnect.noSavedConnections'))
-        return false
-      }
+      const connections = data.connections
+      const activeId = data.activeConnectionId
 
-      const activeId = savedActiveRaw ? JSON.parse(savedActiveRaw) : null
       const ordered = activeId
         ? [connections.find((c) => c.id === activeId), ...connections.filter((c) => c.id !== activeId)]
         : connections
@@ -76,7 +72,12 @@ export function useWebSocket() {
           })
           const result = await response.json()
           if (result.success) {
-            localStorage.setItem('mavlink_active_connection', JSON.stringify(connection.id))
+            // Guardar en backend la conexión activa
+            await fetch('/api/connections/active', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ activeConnectionId: connection.id })
+            })
             if (!silent) notify.info(t('reconnect.reconnectedWith', { name: connection.name }))
             reconnectingRef.current = false
             manualDisconnectRef.current = false
@@ -180,7 +181,8 @@ export function useWebSocket() {
   }, [])
 
   useEffect(() => {
-    if (connectionStatus.connected === false && !reconnectingRef.current) {
+    // No intentar reconectar si fue desconexión manual
+    if (connectionStatus.connected === false && !reconnectingRef.current && !manualDisconnectRef.current) {
       attemptReconnect({ silent: !everConnectedRef.current })
     }
   }, [connectionStatus.connected, attemptReconnect])
@@ -197,6 +199,16 @@ export function useWebSocket() {
   // Función para marcar desconexión manual (detiene auto-reconnect)
   const markManualDisconnect = useCallback(() => {
     manualDisconnectRef.current = true
+    // Limpiar estado inmediatamente
+    setVehicles([])
+    setSelectedVehicleId(null)
+    setMessages([])
+    setParametersProgress({
+      count: 0,
+      received: 0,
+      complete: false,
+      progress: 0
+    })
   }, [])
 
   // Función para reactivar auto-reconnect (al conectar manualmente)

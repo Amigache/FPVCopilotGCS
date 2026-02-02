@@ -23,6 +23,7 @@ function SystemInfo() {
   const [activeTab, setActiveTab] = useState('overview')
   const [keyboard, setKeyboard] = useState({ isOpen: false, fieldName: '', initialValue: '' })
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: '', ssid: '' })
+  const [powerModal, setPowerModal] = useState({ isOpen: false, action: '' })
 
   useEffect(() => {
     fetchSystemInfo()
@@ -203,6 +204,28 @@ function SystemInfo() {
     closeKeyboard()
   }
 
+  const handleReboot = async () => {
+    try {
+      notify.info(t('systemInfo.power.rebooting'))
+      await fetch('/api/system/reboot', { method: 'POST' })
+      setPowerModal({ isOpen: false, action: '' })
+    } catch (error) {
+      console.error('Error rebooting:', error)
+      notify.error(t('systemInfo.power.rebootError'))
+    }
+  }
+
+  const handleShutdown = async () => {
+    try {
+      notify.info(t('systemInfo.power.shuttingDown'))
+      await fetch('/api/system/shutdown', { method: 'POST' })
+      setPowerModal({ isOpen: false, action: '' })
+    } catch (error) {
+      console.error('Error shutting down:', error)
+      notify.error(t('systemInfo.power.shutdownError'))
+    }
+  }
+
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B'
     const k = 1024
@@ -328,6 +351,24 @@ function SystemInfo() {
           </div>
         </div>
       </div>
+
+      <div className="settings-card">
+        <h3 className="card-title">⚡ {t('systemInfo.power.title')}</h3>
+        <div className="button-group">
+          <button 
+            className="system-action-button reboot-button"
+            onClick={() => setPowerModal({ isOpen: true, action: 'reboot' })}
+          >
+            🔄 {t('systemInfo.power.reboot')}
+          </button>
+          <button 
+            className="system-action-button shutdown-button"
+            onClick={() => setPowerModal({ isOpen: true, action: 'shutdown' })}
+          >
+            ⏻ {t('systemInfo.power.shutdown')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 
@@ -388,7 +429,7 @@ function SystemInfo() {
           {devices?.serial && devices.serial.length > 0 ? (
             devices.serial.map((port, index) => (
               <div key={index} className="device-item">
-                {port}
+                {typeof port === 'string' ? port : port.description || port.path}
               </div>
             ))
           ) : (
@@ -662,6 +703,36 @@ function SystemInfo() {
                 disconnectWifi()
               } else if (confirmModal.type === 'forget') {
                 forgetNetwork(confirmModal.ssid)
+              }
+            },
+            variant: 'danger'
+          }
+        ]}
+      />
+
+      <UnifiedModal
+        isOpen={powerModal.isOpen}
+        onClose={() => setPowerModal({ isOpen: false, action: '' })}
+        title={powerModal.action === 'reboot' ? t('systemInfo.power.confirmReboot') : t('systemInfo.power.confirmShutdown')}
+        message={
+          powerModal.action === 'reboot' 
+            ? t('systemInfo.power.rebootMessage')
+            : t('systemInfo.power.shutdownMessage')
+        }
+        type="warning"
+        buttons={[
+          {
+            label: t('systemInfo.cancel'),
+            onClick: () => setPowerModal({ isOpen: false, action: '' }),
+            variant: 'cancel'
+          },
+          {
+            label: t('modal.confirm'),
+            onClick: () => {
+              if (powerModal.action === 'reboot') {
+                handleReboot()
+              } else if (powerModal.action === 'shutdown') {
+                handleShutdown()
               }
             },
             variant: 'danger'

@@ -6,6 +6,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
 import os from 'os';
 import mavlinkService from './mavlink-service.js';
 
@@ -25,6 +27,13 @@ const io = new Server(httpServer, {
 });
 
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = path.join(__dirname, '../data');
+const CONNECTIONS_FILE = path.join(DATA_DIR, 'connections.json');
+
+// Asegurar que el directorio de datos existe
+if (!existsSync(DATA_DIR)) {
+  await mkdir(DATA_DIR, { recursive: true });
+}
 
 // Configurar Socket.IO en mavlink-service
 mavlinkService.setSocketIO(io);
@@ -71,6 +80,83 @@ app.post('/api/mavlink/disconnect', (req, res) => {
 app.get('/api/mavlink/status', (req, res) => {
   const status = mavlinkService.getStatus()
   res.json(status)
+});
+
+// System power Routes
+app.post('/api/system/reboot', (req, res) => {
+  console.log('🔄 Reboot requested')
+  res.json({ success: true, message: 'Rebooting system...' })
+  // Ejecutar el comando después de enviar la respuesta
+  setTimeout(() => {
+    exec('sudo reboot', (error, stdout, stderr) => {
+      if (error) {
+        console.error('Error rebooting:', error)
+        console.error('stderr:', stderr)
+      }
+      if (stdout) console.log('stdout:', stdout)
+    })
+  }, 500)
+});
+
+app.post('/api/system/shutdown', (req, res) => {
+  console.log('⏻ Shutdown requested')
+  res.json({ success: true, message: 'Shutting down system...' })
+  // Ejecutar el comando después de enviar la respuesta
+  setTimeout(() => {
+    exec('sudo poweroff', (error, stdout, stderr) => {
+      if (error) {
+        console.error('Error shutting down:', error)
+        console.error('stderr:', stderr)
+      }
+      if (stdout) console.log('stdout:', stdout)
+    })
+  }, 500)
+});
+
+// Connections persistence Routes
+app.get('/api/connections', async (req, res) => {
+  try {
+    if (!existsSync(CONNECTIONS_FILE)) {
+      return res.json({ connections: [], activeConnectionId: null });
+    }
+    const data = await readFile(CONNECTIONS_FILE, 'utf-8');
+    const parsed = JSON.parse(data);
+    res.json(parsed);
+  } catch (error) {
+    console.error('Error leyendo conexiones:', error);
+    res.json({ connections: [], activeConnectionId: null });
+  }
+});
+
+app.post('/api/connections', async (req, res) => {
+  try {
+    const { connections, activeConnectionId } = req.body;
+    await writeFile(CONNECTIONS_FILE, JSON.stringify({ connections, activeConnectionId }, null, 2));
+    res.json({ success: true, message: 'Conexiones guardadas' });
+  } catch (error) {
+    console.error('Error guardando conexiones:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update only activeConnectionId
+app.patch('/api/connections/active', async (req, res) => {
+  try {
+    const { activeConnectionId } = req.body;
+    let data = { connections: [], activeConnectionId: null };
+    
+    if (existsSync(CONNECTIONS_FILE)) {
+      const fileData = await readFile(CONNECTIONS_FILE, 'utf-8');
+      data = JSON.parse(fileData);
+    }
+    
+    data.activeConnectionId = activeConnectionId;
+    await writeFile(CONNECTIONS_FILE, JSON.stringify(data, null, 2));
+    res.json({ success: true, message: 'Conexión activa actualizada' });
+  } catch (error) {
+    console.error('Error actualizando conexión activa:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // MAVLink Parameters Routes
@@ -256,7 +342,7 @@ app.get('/api/system/devices', async (req, res) => {
 
     // Puertos seriales
     try {
-      const { stdout: serialPorts } = await execPromise('ls -1 /dev/tty{USB,ACM,AMA,S}* 2>/dev/null || true');
+      const { stdout: serialPorts } = await execPromise('bash -c "ls -1 /dev/tty{USB,ACM,AMA}* 2>/dev/null || true"');
       const ports = serialPorts.trim().split('\n').filter(p => p && p.startsWith('/dev/'));
       
       if (ports.length > 0) {
@@ -338,8 +424,8 @@ app.get('/api/system/network', async (req, res) => {
 // Serial Ports Detection Route
 app.get('/api/serial/ports', async (req, res) => {
   try {
-    const { stdout } = await execPromise('ls -1 /dev/tty{USB,ACM,AMA,S}* 2>/dev/null || true');
-    const ports = stdout.trim().split('\n').filter(p => p);
+    const { stdout } = await execPromise('bash -c "ls -1 /dev/tty{USB,ACM,AMA}* 2>/dev/null || true"');
+    const ports = stdout.trim().split('\n').filter(p => p && p.length > 0);
     
     const portsInfo = await Promise.all(ports.map(async (port) => {
       try {

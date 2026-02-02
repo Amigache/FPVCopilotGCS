@@ -137,18 +137,26 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
 
   // Autoconexión al iniciar la aplicación
   useEffect(() => {
-    // Solo autoconectar si no está conectado y hay conexiones guardadas
-    const savedConnections = localStorage.getItem('mavlink_connections')
-    const savedActiveConnection = localStorage.getItem('mavlink_active_connection')
-    
-    if (!isConnected && savedConnections && savedActiveConnection) {
-      // Pequeño delay para asegurar que el WebSocket está listo
-      const timer = setTimeout(() => {
-        handleAutoConnect()
-      }, 500)
+    // Solo autoconectar si no está conectado
+    const checkAndAutoConnect = async () => {
+      if (isConnected) return
       
-      return () => clearTimeout(timer)
+      try {
+        const response = await fetch('/api/connections')
+        const data = await response.json()
+        
+        if (data.activeConnectionId && data.connections.length > 0) {
+          // Pequeño delay para asegurar que el WebSocket está listo
+          setTimeout(() => {
+            handleAutoConnect()
+          }, 500)
+        }
+      } catch (error) {
+        console.error('Error checking connections:', error)
+      }
     }
+    
+    checkAndAutoConnect()
   }, []) // Solo ejecutar al montar el componente
 
   // Calcular valores derivados de telemetría desde el vehículo seleccionado
@@ -223,25 +231,28 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
     
     setConnecting(true)
     try {
-      // Obtener lista de conexiones guardadas
-      const savedConnections = localStorage.getItem('mavlink_connections')
-      if (!savedConnections) {
+      // Obtener lista de conexiones guardadas desde backend
+      const response = await fetch('/api/connections')
+      const data = await response.json()
+      
+      if (!data.connections || data.connections.length === 0) {
         console.log('No hay conexiones guardadas')
         notify.error(t('topbar.connectionError.noSavedConnections'))
         setConnecting(false)
         return
       }
 
-      const connections = JSON.parse(savedConnections)
-      if (connections.length === 0) {
-        console.log('Lista de conexiones vacía')
-        notify.error(t('topbar.connectionError.noSavedConnections'))
-        setConnecting(false)
-        return
-      }
+      const connections = data.connections
+      const activeId = data.activeConnectionId
+
+      // Probar primero con la conexión activa, luego con las demás
+      const ordered = activeId
+        ? [connections.find(c => c.id === activeId), ...connections.filter(c => c.id !== activeId)]
+        : connections
 
       // Probar cada conexión hasta encontrar una válida
-      for (const connection of connections) {
+      for (const connection of ordered) {
+        if (!connection) continue
         try {
           const response = await fetch('/api/mavlink/connect', {
             method: 'POST',
@@ -251,7 +262,12 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
           const result = await response.json()
           
           if (result.success) {
-            localStorage.setItem('mavlink_active_connection', JSON.stringify(connection.id))
+            // Guardar en backend la conexión activa
+            await fetch('/api/connections/active', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ activeConnectionId: connection.id })
+            })
             
             // Solicitar parámetros después de conectar
             // Verificar si es modo servidor TCP (no solicitar parámetros aún)
@@ -295,14 +311,19 @@ function TopBar({ onSettingsClick, isSettingsOpen, onArmDisarmRequest }) {
   // Función para desconectar
   const handleDisconnect = async () => {
     try {
-      // Marcar como desconexión manual para detener auto-reconnect
+      // Marcar como desconexión manual (esto limpiará el estado inmediatamente)
       markManualDisconnect()
       
       const response = await fetch('/api/mavlink/disconnect', { method: 'POST' })
       const result = await response.json()
       
       if (result.success) {
-        localStorage.removeItem('mavlink_active_connection')
+        // Limpiar conexión activa en backend
+        await fetch('/api/connections/active', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeConnectionId: null })
+        })
         console.log('Desconectado exitosamente')
       }
     } catch (error) {
